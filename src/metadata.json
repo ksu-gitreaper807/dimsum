@@ -1,0 +1,23 @@
+{
+    "KPlugin": {
+        "Id": "kwin4_effect_software_dim",
+        "Name": "Software Dim",
+        "Description": "Dims the composited desktop image below the hardware backlight minimum by multiplying the final output by a configurable factor.",
+        "Category": "Appearance",
+        "Icon": "display-brightness",
+        "Version": "1.0",
+        "License": "MIT",
+        "EnabledByDefault": false,
+        "Authors": [
+            {
+                "Name": "dimsum contributors"
+            }
+        ]
+    },
+    "X-KDE-Ordering": 99,
+    "org.kde.kwin.effect": {
+        "enabledByDefaultMethod": true,
+        "supportedMethod": true,
+        "internal": false
+    }
+}
