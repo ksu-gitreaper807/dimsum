@@ -145,7 +145,7 @@ Treat HDR outputs as unsupported for now.
 Dependencies (Arch / CachyOS):
 
 ```fish
-sudo pacman -S --needed base-devel cmake extra-cmake-modules kwin \
+sudo pacman -S --needed base-devel cmake extra-cmake-modules qt6-tools kwin \
                         kconfig kcoreaddons kglobalaccel \
                         libepoxy qt6-base
 ```
@@ -154,11 +154,18 @@ Arch does **not** use a `kf6-` prefix — that is Fedora's convention, and pacma
 answers it with `error: target not found`. On Arch `kf6` is a *group*, and the
 individual framework packages are `kconfig`, `kcoreaddons`, `kglobalaccel`.
 
-Arch also has no `-dev` package split, so `kwin` itself provides both the
-`libkwineffects/*.h` headers and the `KWinEffects` CMake config that exports the
-`kwineffects` / `kwinglutils` targets; `libepoxy` provides `epoxy/gl.h`. The
-three `k*` frameworks are already on your system as `kwin` dependencies, so
-`--needed` will normally skip them — they are listed for completeness.
+Arch also has no `-dev` package split, so `kwin` itself provides the effect
+development files — the `KWinEffects` CMake config that exports the
+`kwineffects` / `kwinglutils` targets, and the headers; `libepoxy` provides
+`epoxy/gl.h`. (Cross-checked against the AUR PKGBUILD of an existing Plasma 6
+out-of-tree effect, whose `makedepends` are exactly
+`git cmake extra-cmake-modules qt6-tools kwin`.) The three `k*` frameworks are
+already on your system as `kwin` dependencies, so `--needed` will normally skip
+them — they are listed for completeness.
+
+If `verify-api.sh` cannot find the headers even though `kwin` is installed, it
+prints the diagnostics to locate them; re-run it with
+`KWIN_INCLUDE_ROOT=/that/prefix` once you know where they are.
 
 Other distributions:
 
