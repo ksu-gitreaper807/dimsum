@@ -146,12 +146,33 @@ Dependencies (Arch / CachyOS):
 
 ```fish
 sudo pacman -S --needed base-devel cmake extra-cmake-modules kwin \
-                        kf6-kconfig kf6-kcoreaddons kf6-kglobalaccel \
+                        kconfig kcoreaddons kglobalaccel \
                         libepoxy qt6-base
 ```
 
-`kwin` is what provides the effect development headers and the `kwineffects`
-CMake targets; `libepoxy` provides `epoxy/gl.h`.
+Arch does **not** use a `kf6-` prefix — that is Fedora's convention, and pacman
+answers it with `error: target not found`. On Arch `kf6` is a *group*, and the
+individual framework packages are `kconfig`, `kcoreaddons`, `kglobalaccel`.
+
+Arch also has no `-dev` package split, so `kwin` itself provides both the
+`libkwineffects/*.h` headers and the `KWinEffects` CMake config that exports the
+`kwineffects` / `kwinglutils` targets; `libepoxy` provides `epoxy/gl.h`. The
+three `k*` frameworks are already on your system as `kwin` dependencies, so
+`--needed` will normally skip them — they are listed for completeness.
+
+Other distributions:
+
+```bash
+# Debian / Ubuntu / Neon
+sudo apt install build-essential cmake extra-cmake-modules pkg-config \
+    kwin-dev qt6-base-dev qt6-base-dev-tools libepoxy-dev \
+    libkf6config-dev libkf6coreaddons-dev libkf6globalaccel-dev
+
+# Fedora
+sudo dnf install gcc-c++ cmake extra-cmake-modules pkgconf-pkg-config \
+    kwin-devel qt6-qtbase-devel libepoxy-devel \
+    kf6-kconfig-devel kf6-kcoreaddons-devel kf6-kglobalaccel-devel
+```
 
 Then:
 
@@ -331,7 +352,7 @@ and the pattern. The likely candidates and what to do:
 | `GLTexture::allocate` | `GLTexture::allocateInternalFormat(GLint, QSize)` | one line in `ensureOffscreen()` |
 | `GLFramebuffer::create` | factory moved to `GLRenderTarget` | `ensureOffscreen()`, and the `RenderTarget` construction in `paintScreen()` |
 | `pushShader(GLShader *)` | overload takes `std::shared_ptr<GLShader>` | make `m_shader` a `shared_ptr` in the header |
-| `KWIN_EFFECT_CLASS macro` | — | `src/main.cpp` automatically falls back to `K_PLUGIN_FACTORY_WITH_JSON`; if the effect then will not load, your KWin checks the plugin IID and you must build against the installed `kwin` headers |
+| `KWIN_EFFECT_CLASS macro` | — | `src/main.cpp` falls back to `K_PLUGIN_FACTORY_WITH_JSON`, which **builds but will not load**: KWin 6.7.5 stamps its effect plugins with the IID `org.kde.kwin.EffectPluginFactory6.7.5` (6.7.90 uses `…Factory6.7.90`), and a plain KF6 factory carries none. Build against the installed `kwin` headers so the macro branch is taken |
 
 **Shader fails to link** (`GL_INVALID_VALUE`, or `kwin_effect_software_dim:
 Failed to compile the dim shader` in the journal). KWin's `ShaderManager`
@@ -497,6 +518,11 @@ Being explicit, because it changes how much you should trust a first build:
   changed it to `[[nodiscard]] bool` — a third-party effect that builds against
   both.
 * Effect plugins load from Qt's plugin directory, not from `~/.local`.
+* The plugin IID is **version-stamped**: `org.kde.kwin.EffectPluginFactory6.7.5`
+  on KWin 6.7.5 and `org.kde.kwin.EffectPluginFactory6.7.90` on 6.7.90 — which
+  is why `KWIN_EFFECT_CLASS` must come from your installed headers rather than
+  being hand-rolled, and why an effect built against one Plasma will not load on
+  another. (Reported by a third-party effect that builds against both.)
 
 **Not checked**, because there was no KWin, Qt6, KF6, CMake or network package
 source available in the build sandbox:

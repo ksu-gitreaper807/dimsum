@@ -52,10 +52,16 @@ find_package(KWinEffects CONFIG QUIET)
 if(NOT TARGET kwineffects)
     message(FATAL_ERROR
         "Could not find KWin's effect development targets (kwineffects / kwinglutils).\n"
-        "Install them and re-run cmake:\n"
-        "  Arch / CachyOS : sudo pacman -S kwin\n"
-        "  Debian / Ubuntu: sudo apt install kwin-dev\n"
-        "  Fedora         : sudo dnf install kwin-devel\n"
+        "Install them and re-run cmake. Arch has no -dev split, so `kwin` alone is\n"
+        "enough there (and note Arch uses kconfig, not kf6-kconfig):\n"
+        "  Arch / CachyOS : sudo pacman -S --needed cmake extra-cmake-modules kwin \\\n"
+        "                       kconfig kcoreaddons kglobalaccel libepoxy qt6-base\n"
+        "  Debian / Ubuntu: sudo apt install cmake extra-cmake-modules pkg-config \\\n"
+        "                       kwin-dev qt6-base-dev libepoxy-dev \\\n"
+        "                       libkf6config-dev libkf6coreaddons-dev libkf6globalaccel-dev\n"
+        "  Fedora         : sudo dnf install cmake extra-cmake-modules pkgconf-pkg-config \\\n"
+        "                       kwin-devel qt6-qtbase-devel libepoxy-devel \\\n"
+        "                       kf6-kconfig-devel kf6-kcoreaddons-devel kf6-kglobalaccel-devel\n"
         "If they are installed but not found, point cmake at them:\n"
         "  cmake -B build -DKWinEffects_DIR=/usr/lib/cmake/KWinEffects\n")
 endif()

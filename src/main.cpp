@@ -36,12 +36,18 @@ KWIN_EFFECT_CLASS(SoftwareDimEffect, "kwin4_effect_software_dim")
 /*
  * Fallback for a KWin whose headers do not export KWIN_EFFECT_CLASS.
  *
- * This is a plain KF6 plugin factory. It builds, but KWin may refuse to load
- * the result if your KWin checks the plugin IID (KWin 6.7 stamps a
- * version-specific IID). If the effect does not show up in
- *   qdbus6 org.kde.KWin /Effects listOfEffects
- * that is why: install the matching kwin headers (Arch: `sudo pacman -S kwin`)
- * and rebuild so the KWIN_EFFECT_CLASS branch above is taken instead.
+ * WARNING: this makes the build succeed, but KWin will not load the result.
+ * KWin 6.7.5 stamps its effect plugins with a version-specific IID —
+ * `org.kde.kwin.EffectPluginFactory6.7.5` (6.7.90 uses
+ * `org.kde.kwin.EffectPluginFactory6.7.90`) — and a plain KF6 factory carries
+ * no such IID, so the plugin is rejected at load time.
+ *
+ * So if you land here, do not go debugging the effect. Install the kwin headers
+ * that match your running compositor and rebuild so the branch above is taken.
+ * On Arch there is no -dev split, so `sudo pacman -S kwin` already covers it.
+ * Check which branch you are getting with:
+ *
+ *   grep -rn "KWIN_EFFECT_CLASS\|EffectPluginFactory" /usr/include/libkwineffects/
  */
 K_PLUGIN_FACTORY_WITH_JSON(SoftwareDimEffectFactory,
                            "metadata.json",
