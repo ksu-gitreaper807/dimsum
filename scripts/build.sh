@@ -1,0 +1,37 @@
+#!/usr/bin/env bash
+# SPDX-FileCopyrightText: 2026 The dimsum contributors
+# SPDX-License-Identifier: MIT
+#
+# build.sh — verify the API, then configure and compile.
+#
+#   ./scripts/build.sh                 # Release build in ./build
+#   ./scripts/build.sh --verbose       # show the full compiler command lines
+
+set -euo pipefail
+
+cd "$(dirname "$0")/.."
+
+VERBOSE=""
+[[ "${1:-}" == "--verbose" ]] && VERBOSE="--verbose"
+
+echo "==> Checking the installed KWin headers"
+if ! ./scripts/verify-api.sh; then
+    echo
+    echo "Refusing to build against headers that are missing symbols this effect needs."
+    echo "Read the table above and README.md -> Troubleshooting."
+    exit 1
+fi
+
+echo
+echo "==> Configuring"
+cmake -B build -DCMAKE_BUILD_TYPE="${CMAKE_BUILD_TYPE:-Release}"
+
+echo
+echo "==> Building"
+cmake --build build --parallel "${VERBOSE}"
+
+echo
+echo "==> Built:"
+ls -l build/kwin4_effect_software_dim.so
+echo
+echo "Next:  ./scripts/install.sh"

@@ -1,0 +1,16 @@
+<!DOCTYPE RCC>
+<!--
+    SPDX-FileCopyrightText: 2026 The dimsum contributors
+    SPDX-License-Identifier: MIT
+
+    Shaders are compiled into the plugin binary as Qt resources so that the
+    effect does not depend on a file being present in ~/.local/share/kwin/shaders.
+    Q_INIT_RESOURCE(softwaredim) in softwaredim.cpp initialises this file; the
+    resource name must match the .qrc file name.
+-->
+<RCC>
+    <qresource prefix="/softwaredim">
+        <file>shaders/software_dim.frag</file>
+        <file>shaders/software_dim_core.frag</file>
+    </qresource>
+</RCC>
