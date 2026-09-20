@@ -40,9 +40,13 @@ if [[ -n "$dest" ]]; then
 else
     echo "    No build/ directory to read the install path from; removing from the"
     echo "    usual locations instead."
-    for d in /usr/lib/qt6/plugins/kwin/effects/lib \
+    for d in /usr/lib/qt6/plugins/kwin/effects/plugins \
+             /usr/lib64/qt6/plugins/kwin/effects/plugins \
+             /usr/lib/x86_64-linux-gnu/qt6/plugins/kwin/effects/plugins \
+             /usr/lib/qt6/plugins/kwin/effects/lib \
              /usr/lib64/qt6/plugins/kwin/effects/lib \
              /usr/lib/x86_64-linux-gnu/qt6/plugins/kwin/effects/lib; do
+        # (the effects/lib entries are pre-port leftovers — never a 6.7 load path)
         for f in "$d/$ID.so" "$d/lib$ID.so"; do
             [[ -e "$f" ]] && sudo rm -v "$f"
         done

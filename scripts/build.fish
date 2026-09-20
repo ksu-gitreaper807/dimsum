@@ -6,6 +6,12 @@
 #
 #   ./scripts/build.fish                 # Release build in ./build
 #   ./scripts/build.fish --verbose       # show the full compiler command lines
+#
+# Configure step resolves the `KWin` CMake package (KWinConfig.cmake) and its
+# KWin::kwin target; the "Configured against" lines below confirm which KWin
+# the build picked up. Override a non-standard location with:
+#
+#   cmake -B build -DKWin_DIR=/path/to/cmake/KWin
 
 cd (dirname (status --current-filename))/..
 or exit 1
@@ -31,6 +37,19 @@ if set -q CMAKE_BUILD_TYPE; and test -n "$CMAKE_BUILD_TYPE"
 end
 cmake -B build -DCMAKE_BUILD_TYPE="$build_type"
 or exit $status
+
+echo
+echo "==> Configured against"
+set kwin_dir (cmake -LA -N build 2>/dev/null | awk -F= '/^KWin_DIR:/{print $2}')
+set dest (cmake -LA -N build 2>/dev/null | awk -F= '/^KWIN_EFFECTS_INSTALL_DIR:/{print $2}')
+if test -z "$kwin_dir"
+    set kwin_dir "<unknown>"
+end
+if test -z "$dest"
+    set dest "<unknown>"
+end
+echo "    KWin CMake config : $kwin_dir"
+echo "    plugin install dir: $dest"
 
 echo
 echo "==> Building"

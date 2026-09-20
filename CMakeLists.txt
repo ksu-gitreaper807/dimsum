@@ -18,7 +18,8 @@ project(kwin4_effect_software_dim
     LANGUAGES CXX
 )
 
-# KWin 6 is C++20.
+# KWin 6.7 itself builds as C++23; this effect only needs C++20 (none of the
+# KWin headers it includes use newer language features).
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
@@ -37,21 +38,22 @@ endif()
 find_package(ECM REQUIRED NO_MODULE)
 set(CMAKE_MODULE_PATH ${ECM_MODULE_PATH} ${CMAKE_MODULE_PATH})
 
-include(KDEInstallDirs6)
+include(KDEInstallDirs)
 include(KDECMakeSettings)
 include(KDECompilerSettings NO_POLICY_SCOPE)
 
 find_package(Qt6 REQUIRED COMPONENTS Core Gui)
 find_package(KF6 REQUIRED COMPONENTS Config CoreAddons GlobalAccel)
 
-# KWin 6.4+ ships its effect API as two linkable targets, kwineffects and
-# kwinglutils, exported by a CMake package config. On Arch this comes from the
+# KWin 6 exports its effect API as the single linkable target KWin::kwin from
+# the `KWin` CMake package (KWinConfig.cmake), with headers under
+# <prefix>/include/kwin/{effect,core,opengl,...}. On Arch this comes from the
 # `kwin` package itself; on Debian/Ubuntu from `kwin-dev`.
-find_package(KWinEffects CONFIG QUIET)
+find_package(KWin CONFIG QUIET)
 
-if(NOT TARGET kwineffects)
+if(NOT TARGET KWin::kwin)
     message(FATAL_ERROR
-        "Could not find KWin's effect development targets (kwineffects / kwinglutils).\n"
+        "Could not find KWin's effect development files (KWin::kwin target).\n"
         "Install them and re-run cmake. Arch has no -dev split, so `kwin` alone is\n"
         "enough there (and note Arch uses kconfig, not kf6-kconfig):\n"
         "  Arch / CachyOS : sudo pacman -S --needed cmake extra-cmake-modules \\\n"
@@ -64,7 +66,7 @@ if(NOT TARGET kwineffects)
         "                       kwin-devel qt6-qtbase-devel libepoxy-devel \\\n"
         "                       kf6-kconfig-devel kf6-kcoreaddons-devel kf6-kglobalaccel-devel\n"
         "If they are installed but not found, point cmake at them:\n"
-        "  cmake -B build -DKWinEffects_DIR=/usr/lib/cmake/KWinEffects\n")
+        "  cmake -B build -DKWin_DIR=/usr/lib/cmake/KWin\n")
 endif()
 
 # libepoxy provides the GL headers (epoxy/gl.h) that KWin's own effects use.
@@ -91,7 +93,7 @@ set_target_properties(kwin4_effect_software_dim PROPERTIES
 )
 
 target_link_libraries(kwin4_effect_software_dim PRIVATE
-    kwineffects
+    KWin::kwin
     Qt::Core
     Qt::Gui
     KF6::ConfigCore
@@ -100,21 +102,17 @@ target_link_libraries(kwin4_effect_software_dim PRIVATE
     PkgConfig::EPOXY
 )
 
-if(TARGET kwinglutils)
-    # kwinglutils is only needed for the raw-GL helpers; link it when present
-    # so the build works on KWin releases that fold it into kwineffects.
-    target_link_libraries(kwin4_effect_software_dim PRIVATE kwinglutils)
-endif()
-
 # --------------------------------------------------------------------------
 # Install
 # --------------------------------------------------------------------------
 
-# KWin scans <qt plugin dir>/kwin/effects/lib for effect plugins, e.g.
-#   /usr/lib/qt6/plugins/kwin/effects/lib/libkwin4_effect_blur.so
-# scripts/install.sh confirms the real path on your machine by looking at
-# where the built-in effects are installed.
-set(KWIN_EFFECTS_INSTALL_DIR "${KDE_INSTALL_PLUGINDIR}/kwin/effects/lib"
+# KWin scans <qt plugin dir>/kwin/effects/plugins for effect plugins, e.g.
+#   /usr/lib/qt6/plugins/kwin/effects/plugins/kwin4_effect_software_dim.so
+# (src/effect/effectloader.cpp: PluginEffectLoader::m_pluginSubDirectory).
+# Note the built-in effects are compiled statically into kwin_wayland, so an
+# empty plugins directory on a fresh system is normal — it is still the right
+# place. scripts/verify-api.sh confirms the Qt plugin dir on your machine.
+set(KWIN_EFFECTS_INSTALL_DIR "${KDE_INSTALL_PLUGINDIR}/kwin/effects/plugins"
     CACHE PATH "Directory KWin loads native effect plugins from")
 
 install(TARGETS kwin4_effect_software_dim
@@ -133,7 +131,7 @@ install(FILES src/metadata.json
 
 message(STATUS "")
 message(STATUS "Software Dim ${PROJECT_VERSION}")
-message(STATUS "  KWinEffects package : ${KWinEffects_DIR}")
+message(STATUS "  KWin package       : ${KWin_DIR} (version ${KWin_VERSION})")
 message(STATUS "  plugin install dir  : ${KWIN_EFFECTS_INSTALL_DIR}")
 message(STATUS "  build type          : ${CMAKE_BUILD_TYPE}")
 message(STATUS "")
