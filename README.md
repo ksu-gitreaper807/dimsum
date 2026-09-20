@@ -185,9 +185,12 @@ Then:
 
 ```fish
 cd dimsum
-./scripts/verify-api.sh      # <-- run this first, see next section
-./scripts/build.sh
+./scripts/verify-api.fish    # <-- run this first, see next section
+./scripts/build.fish
 ```
+
+Fish-native versions are provided alongside the original Bash scripts; use the
+`.fish` files when running from Fish, or the `.sh` files when running from Bash.
 
 Or by hand:
 
@@ -196,7 +199,7 @@ cmake -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build
 ```
 
-## 9. `scripts/verify-api.sh` — read this before you build
+## 9. `scripts/verify-api.{sh,fish}` — read this before you build
 
 KWin's effect API is a moving target, and I wrote this tree against the
 **upstream 6.7 sources**, not against your installed headers — I had no KWin to
@@ -204,7 +207,7 @@ compile against here. So the tree ships a checker that answers the only question
 that matters on your machine:
 
 ```fish
-./scripts/verify-api.sh
+./scripts/verify-api.fish
 ```
 
 It locates `libkwineffects/kwineffects.h`, then greps for every single symbol
@@ -220,7 +223,7 @@ It also prints the **actual installed `paintScreen` signature** and tells you if
 your KWin returns `[[nodiscard]] bool` (KWin 6.7.90 / Plasma 6.8) instead of
 `void` (6.7.x), which is the one change this tree would need for a newer Plasma.
 
-Point it at a non-standard prefix with `KWIN_INCLUDE_ROOT=/path ./scripts/verify-api.sh`.
+Point it at a non-standard prefix with `KWIN_INCLUDE_ROOT=/path ./scripts/verify-api.fish`.
 
 **Run it. If it reports `MISSING`, do not guess — the table names the file and
 the pattern, and §15 maps each one to the line to change.**
@@ -482,11 +485,11 @@ plugin and the metadata copy, and removes any leftover scripted prototype. Idemp
 ├── LICENSE
 ├── README.md
 ├── scripts/
-│   ├── build.sh          # verify-api, then configure + build
-│   ├── install.sh        # build + install + clean up the old prototype
-│   ├── test.sh           # the six acceptance stages
+│   ├── build.sh / build.fish              # verify-api, then configure + build
+│   ├── install.sh                          # build + install + clean up the old prototype
+│   ├── test.sh                             # the six acceptance stages
 │   ├── uninstall.sh
-│   └── verify-api.sh     # checks your installed KWin headers for every symbol used
+│   └── verify-api.sh / verify-api.fish     # check installed KWin headers and symbols
 └── src/
     ├── main.cpp          # plugin entry point (KWIN_EFFECT_CLASS)
     ├── metadata.json     # compiled into the .so
