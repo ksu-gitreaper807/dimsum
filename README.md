@@ -95,9 +95,9 @@ The mechanics, and where each one comes from:
 1. `SoftwareDimEffect` is a plain `KWin::Effect` at effect-chain position `99`,
    i.e. late — so the capture already contains every other effect's output.
 2. `paintScreen(const RenderTarget &, const RenderViewport &, int, const
-   QRegion &, Output *)` is called once per output per frame. This is the
-   documented hook for exactly this job; KWin's own Zoom/Magnifier effect uses
-   the same shape.
+   Region &, LogicalOutput *)` is called once per output per frame. This is
+   the documented hook for exactly this job; KWin's own Zoom/Magnifier effect
+   uses the same shape.
 3. Pass 1 builds a private `RenderTarget`/`RenderViewport` pair around our own
    `GLFramebuffer`, pushes it, and calls `effects->paintScreen(...)`. That call
    does **not** recurse into us: KWin's `EffectsHandler` tracks the current
@@ -106,8 +106,10 @@ The mechanics, and where each one comes from:
    to override the properties now, it just creates its own `RenderTarget` and
    `RenderViewport` and passes that to rendering methods".
 4. Pass 2 pops back to the real framebuffer and draws the captured texture as
-   one full-screen quad through `software_dim_core.frag`, which does the
-   multiply.
+   one full-screen quad through `software_dim.frag`, which does the
+   multiply. (KWin 6.7.5 loads that file verbatim on every context; the
+   `_core` twin in the `.qrc` is never resolved by this KWin and is kept only
+   for forward compatibility — see the comment at its top.)
 5. `dimAmount` is a **uniform**, so changing the level costs a `setUniform` and
    a repaint. The shader is never recompiled, and the effect is never
    re-created.
@@ -133,9 +135,9 @@ light. Consequences:
   banding that a linear-space multiply would introduce after re-encoding.
 
 If you want a true linear-light dim later, the change is confined to one file:
-convert to linear in `software_dim_core.frag`, multiply, convert back. KWin's
+convert to linear in `software_dim.frag`, multiply, convert back. KWin's
 `RenderTarget` already carries a `ColorDescription`, and `GLShader` has a
-`ShaderTrait::TransformColorspace` plus `setColorspaceUniformsFromSRGB()` for
+`ShaderTrait::TransformColorspace` plus `setColorspaceUniforms()` for
 exactly this. HDR/PQ/HLG outputs are **not** handled: the dim would be applied
 to PQ-encoded values, which is wrong in a way that is visible as a colour shift.
 Treat HDR outputs as unsupported for now.
@@ -155,13 +157,13 @@ answers it with `error: target not found`. On Arch `kf6` is a *group*, and the
 individual framework packages are `kconfig`, `kcoreaddons`, `kglobalaccel`.
 
 Arch also has no `-dev` package split, so `kwin` itself provides the effect
-development files — the `KWinEffects` CMake config that exports the
-`kwineffects` / `kwinglutils` targets, and the headers; `libepoxy` provides
-`epoxy/gl.h`. (Cross-checked against the AUR PKGBUILD of an existing Plasma 6
-out-of-tree effect, whose `makedepends` are exactly
-`git cmake extra-cmake-modules qt6-tools kwin`.) The three `k*` frameworks are
-already on your system as `kwin` dependencies, so `--needed` will normally skip
-them — they are listed for completeness.
+development files — the `KWin` CMake config (`KWinConfig.cmake`, exporting the
+`KWin::kwin` target) and the headers under `/usr/include/kwin/{effect,core,
+opengl,...}`; `libepoxy` provides `epoxy/gl.h`. (Cross-checked against the
+AUR PKGBUILD of an existing Plasma 6 out-of-tree effect, whose `makedepends`
+are exactly `git cmake extra-cmake-modules qt6-tools kwin`.) The three `k*`
+frameworks are already on your system as `kwin` dependencies, so `--needed`
+will normally skip them — they are listed for completeness.
 
 If `verify-api.sh` cannot find the headers even though `kwin` is installed, it
 prints the diagnostics to locate them; re-run it with
@@ -210,13 +212,14 @@ that matters on your machine:
 ./scripts/verify-api.fish
 ```
 
-It locates `libkwineffects/kwineffects.h`, then greps for every single symbol
-the effect uses and prints a table of `ok` / `MISSING` with file and line, e.g.
+It locates the installed `kwin/effect/effect.h` anchor, then greps for every
+single symbol the effect uses and prints a table of `ok` / `MISSING` with file
+and line, e.g.
 
 ```text
-  paintScreen hook                   ok         libkwineffects/kwineffects.h:1523
-  GLFramebuffer::pushFramebuffer     ok         libkwineffects/glframebuffer.h:41
-  GLTexture::allocate                MISSING    libkwineffects/gltexture.h  (expected: allocate *\()
+  paintScreen hook                   ok         effect/effect.h:709
+  GLFramebuffer::pushFramebuffer     ok         opengl/glframebuffer.h:91
+  GLTexture::allocate                MISSING    opengl/gltexture.h  (expected: allocate *\()
 ```
 
 It also prints the **actual installed `paintScreen` signature** and tells you if
@@ -242,8 +245,10 @@ share an effect id).
 ### Why this needs sudo
 
 KWin discovers native effect plugins by scanning **Qt's system plugin
-directory** — on Arch, `/usr/lib/qt6/plugins/kwin/effects/lib`, alongside the
-built-ins. `~/.local/lib/qt6/plugins` is not on Qt's plugin search path, so a
+directory** — on Arch, `/usr/lib/qt6/plugins/kwin/effects/plugins`. (The
+built-in effects are compiled statically into `kwin_wayland`, so do not be
+surprised if that directory is empty on a fresh system — it is still the right
+place.) `~/.local/lib/qt6/plugins` is not on Qt's plugin search path, so a
 user-local `.so` is not found unless you export `QT_PLUGIN_PATH` in the session
 environment *before* KWin starts. That works, but it is fragile and not
 something KDE supports for effect plugins, so the honest default is a system
@@ -253,7 +258,7 @@ If you want it anyway:
 
 ```fish
 cmake -B build -DCMAKE_INSTALL_PREFIX=$HOME/.local \
-               -DKWIN_EFFECTS_INSTALL_DIR=lib/qt6/plugins/kwin/effects/lib
+               -DKWIN_EFFECTS_INSTALL_DIR=lib/qt6/plugins/kwin/effects/plugins
 cmake --build build && cmake --install build
 # then, before the session starts (e.g. in ~/.config/plasma-workspace/env/):
 set -gx QT_PLUGIN_PATH $HOME/.local/lib/qt6/plugins $QT_PLUGIN_PATH
@@ -262,7 +267,7 @@ set -gx QT_PLUGIN_PATH $HOME/.local/lib/qt6/plugins $QT_PLUGIN_PATH
 If `install.sh` cannot auto-detect the directory, pass it explicitly:
 
 ```fish
-cmake -B build -DKWIN_EFFECTS_INSTALL_DIR=lib/qt6/plugins/kwin/effects/lib
+cmake -B build -DKWIN_EFFECTS_INSTALL_DIR=lib/qt6/plugins/kwin/effects/plugins
 ```
 
 ### Enable
@@ -307,7 +312,7 @@ Enabled=false
 |---|---|---|
 | `DimAmount` | `0.20` | The multiply factor. `1.00` = no change, `0.05` = darkest. |
 | `DimStep` | `0.05` | How far `Meta+Alt+Up/Down` moves it. |
-| `DimMin` | `0.05` | Lower clamp. `0.00` is allowed by the code but is a black screen. |
+| `DimMin` | `0.05` | Lower clamp. Hard floor is `0.01` (`0.00` would be a black screen). |
 | `Enabled` | `false` | Persisted toggle state, written on every toggle. |
 
 Edit by hand, then `qdbus6 org.kde.KWin /KWin reconfigure` — `reconfigure()`
@@ -359,18 +364,20 @@ and the pattern. The likely candidates and what to do:
 | Symbol | If missing, your KWin renamed/changed | Where to fix |
 |---|---|---|
 | `paintScreen hook` | returns `[[nodiscard]] bool` from 6.7.90 | `src/softwaredim.h` and `src/softwaredim.cpp`: change the return type and `return true;` at the end of the function |
+| `paintScreen Region/Output types` | region/output parameter types again | `src/softwaredim.h` and `src/softwaredim.cpp`: match the installed signature (6.7.x is `const Region &` + `LogicalOutput *`) |
 | `GLTexture::allocate` | `GLTexture::allocateInternalFormat(GLint, QSize)` | one line in `ensureOffscreen()` |
-| `GLFramebuffer::create` | factory moved to `GLRenderTarget` | `ensureOffscreen()`, and the `RenderTarget` construction in `paintScreen()` |
+| `GLFramebuffer(GLTexture *)` | constructor replaced by a factory again | `ensureOffscreen()` |
 | `pushShader(GLShader *)` | overload takes `std::shared_ptr<GLShader>` | make `m_shader` a `shared_ptr` in the header |
-| `KWIN_EFFECT_CLASS macro` | — | `src/main.cpp` falls back to `K_PLUGIN_FACTORY_WITH_JSON`, which **builds but will not load**: KWin 6.7.5 stamps its effect plugins with the IID `org.kde.kwin.EffectPluginFactory6.7.5` (6.7.90 uses `…Factory6.7.90`), and a plain KF6 factory carries none. Build against the installed `kwin` headers so the macro branch is taken |
+| `KWIN_EFFECT_FACTORY macro` | — | `src/main.cpp` falls back to `K_PLUGIN_FACTORY_WITH_JSON`, which **builds but will not load**: KWin 6.7.5 stamps its effect plugins with the IID `org.kde.kwin.EffectPluginFactory6.7.5` (6.7.90 uses `…Factory6.7.90`), and a plain KF6 factory carries none. Build against the installed `kwin` headers so the macro branch is taken |
 
-**Shader fails to link** (`GL_INVALID_VALUE`, or `kwin_effect_software_dim:
-Failed to compile the dim shader` in the journal). KWin's `ShaderManager`
-prepends a generated header to the fragment file. If it declares `sampler`,
-`texcoord0` and `fragColor` for you — which the shaders in this tree assume —
-then re-declaring them is a GLSL redefinition error. If your KWin does *not*
-inject them you get `undeclared identifier 'sampler'` instead. Either way the
-fix is one block at the top of both `.frag` files:
+**Shader fails to compile** (`kwin_effect_software_dim: Failed to compile the
+dim shader` in the journal, plus a numbered source dump from KWin under the
+`kwin_opengl` category). On 6.7.5 the `.frag` files must declare their own
+`sampler` / `texcoord0` / `fragColor` — KWin prepends only `#version`,
+precision qualifiers and `TRAIT_*` defines (`GLShader::preprocess` in
+`src/opengl/glshader.cpp`), exactly like its own effect shaders do. If a future
+KWin starts injecting them, the failure mode flips to a GLSL redefinition
+error, and the fix is to delete that block from both `.frag` files:
 
 ```glsl
 uniform sampler2D sampler;
@@ -443,11 +450,11 @@ to live. Say the word and it is a small change.
 automatically — internal, external, any number. Nothing is hard-coded to
 `eDP-1`.
 
-Per-output control is not implemented, because it needs `Output::name()` and
-`Output` lives in KWin's private core headers rather than in the installed
-`libkwineffects` set. Adding it means including `core/output.h` and keeping a
-`QSet<QString>` of dimmed output names in `paintScreen()`. Global dimming is the
-documented behaviour for now.
+Per-output control is not implemented, but nothing stands in its way:
+`paintScreen()` already receives a `LogicalOutput *`, and
+`LogicalOutput::name()` is in the installed `kwin/core/output.h` set. Adding
+it means keeping a `QSet<QString>` of dimmed output names and consulting it in
+`paintScreen()`. Global dimming is the documented behaviour for now.
 
 ## 18. Testing
 
@@ -491,63 +498,75 @@ plugin and the metadata copy, and removes any leftover scripted prototype. Idemp
 │   ├── uninstall.sh
 │   └── verify-api.sh / verify-api.fish     # check installed KWin headers and symbols
 └── src/
-    ├── main.cpp          # plugin entry point (KWIN_EFFECT_CLASS)
+    ├── main.cpp          # plugin entry point (KWIN_EFFECT_FACTORY_*)
     ├── metadata.json     # compiled into the .so
     ├── softwaredim.h
     ├── softwaredim.cpp
     ├── softwaredim.qrc
     └── shaders/
-        ├── software_dim.frag        # OpenGL ES
-        └── software_dim_core.frag   # desktop OpenGL (your 4.6 context)
+        ├── software_dim.frag        # the shader, on every context
+        └── software_dim_core.frag   # identical twin, kept for forward compat
 ```
 
 ## 21. Verification status — what was checked, and what was not
 
 Being explicit, because it changes how much you should trust a first build:
 
-**Checked against upstream sources** (fetched from `invent.kde.org` /
-`KDE/kwin` during development):
+**Checked against the KWin `v6.7.5` sources** (the exact tag this tree targets,
+fetched from `KDE/kwin` during development — file, line and spelling):
 
+* Installed layout: headers under `kwin/{effect,core,opengl,...}`,
+  `KWinConfig.cmake` exporting `KWin::kwin` — `src/CMakeLists.txt`,
+  `KWinConfig.cmake.in`.
+* `paintScreen(const RenderTarget &, const RenderViewport &, int, const Region
+  &, LogicalOutput *)` returning `void`,
+  `RenderTarget(GLFramebuffer *, std::shared_ptr<ColorDescription>)`,
+  four-argument `RenderViewport(RectF, double, RenderTarget, QPoint)`,
+  `GLFramebuffer::pushFramebuffer/popFramebuffer`,
+  `effects->paintScreen(...)`, `GLShader::Mat4Uniform::ModelViewProjectionMatrix`,
+  `viewport.projectionMatrix()`, `viewport.deviceSize()`,
+  `GLTexture::render(QSizeF)` — `src/effect/effect.h`, `src/core/`,
+  `src/opengl/`, and KWin's Zoom effect, whose offscreen pass this effect
+  mirrors (`src/plugins/zoom/zoom.cpp`).
+* `GLTexture::allocate(GLenum, QSize, int)` — and that `GLFramebuffer` has no
+  `create()` factory on 6.7.5, only the `GLFramebuffer(GLTexture *)`
+  constructor. `GLShader` has no `isValid()` — `generateShaderFromFile()`
+  returns `nullptr` on failure.
+* `KWIN_EFFECT_FACTORY_SUPPORTED_ENABLED` and the version-stamped
+  `EffectPluginFactory_iid` (`org.kde.kwin.EffectPluginFactory6.7.5`) —
+  `src/effect/effect.h`, enforced by `src/effect/effectloader.cpp`, which is
+  why the macro must come from your installed headers rather than being
+  hand-rolled, and why an effect built against one Plasma will not load on
+  another.
+* Effect plugins load from `<qt plugin dir>/kwin/effects/plugins`, not from
+  `~/.local` — `src/effect/effectloader.cpp`. The `verify-api` scripts confirm
+  the directory by asking Qt (`qtpaths6`/`qmake6`) rather than guessing it.
+* The `.frag` files must declare `sampler`/`texcoord0`/`fragColor` themselves:
+  `GLShader::preprocess` (`src/opengl/glshader.cpp`) prepends only `#version`,
+  precision qualifiers and `TRAIT_*` defines, and 6.7.5's
+  `generateShaderFromFile` loads the exact path it is given (the `_core`
+  suffix in its header comment is not implemented). Same declarations as
+  `src/plugins/invert/shaders/invert.frag`.
 * `Effect` signals are `windowAdded` / `windowClosed` — `windowShown` /
   `windowDeleted` do not exist in KWin 6 (this is the error your prototype hit).
 * Global shortcut registration pattern, including `setAutoRepeat(false)` —
   `src/plugins/invert/invert.cpp`.
-* `ShaderManager::instance()->generateShaderFromFile(ShaderTrait::MapTexture,
-  QString(), ":/…/x.frag")` with paired `.frag` / `_core.frag` resources and
-  `Q_INIT_RESOURCE` — `src/plugins/invert/invert.cpp`,
-  `src/plugins/colorblindnesscorrection/`.
 * `Q_LOGGING_CATEGORY(…, "kwin_effect_<id>", QtWarningMsg)` and the
   `#include "moc_<name>.cpp"` convention — both upstream effects.
-* `paintScreen(const RenderTarget &, const RenderViewport &, int, const QRegion
-  &, Output *)`, `RenderTarget(GLFramebuffer *, ColorDescription)`,
-  `RenderViewport(QRect, qreal, RenderTarget)`,
-  `GLFramebuffer::pushFramebuffer/popFramebuffer`,
-  `effects->paintScreen(...)`, `GLShader::Mat4Uniform::ModelViewProjectionMatrix`,
-  `viewport.projectionMatrix()`, `GLTexture::render(QSizeF)` — KWin's Zoom effect.
 * KWin 6.7 declares `paintScreen` returning `void`; KWin 6.7.90 (Plasma 6.8)
   changed it to `[[nodiscard]] bool` — a third-party effect that builds against
   both.
-* Effect plugins load from Qt's plugin directory, not from `~/.local`.
-* The plugin IID is **version-stamped**: `org.kde.kwin.EffectPluginFactory6.7.5`
-  on KWin 6.7.5 and `org.kde.kwin.EffectPluginFactory6.7.90` on 6.7.90 — which
-  is why `KWIN_EFFECT_CLASS` must come from your installed headers rather than
-  being hand-rolled, and why an effect built against one Plasma will not load on
-  another. (Reported by a third-party effect that builds against both.)
+* `scripts/verify-api.sh` was run against the 6.7.5 headers and reports all
+  symbols present.
 
-**Not checked**, because there was no KWin, Qt6, KF6, CMake or network package
-source available in the build sandbox:
+**Not checked**, because there was no KWin, Qt6, KF6 or CMake in the porting
+sandbox, and no running compositor anywhere near it:
 
 * this tree has **not been compiled**;
-* it has **not been loaded by a running compositor**;
-* the exact spelling of `GLTexture::allocate`, `GLFramebuffer::create`,
-  `ShaderManager::pushShader(GLShader *)` and the `KWIN_EFFECT_CLASS` macro on
-  6.7.5 is taken from upstream code but not confirmed against your installed
-  headers;
-* the assumption that `ShaderManager` injects `sampler`/`texcoord0`/`fragColor`
-  into effect shaders is inference from KWin's own shader files.
+* it has **not been loaded by a running compositor**.
 
-`scripts/verify-api.sh` exists to close that gap on your machine in one command,
-before you invest in a build.
+`scripts/verify-api.sh` exists to close the remaining gap — installed headers
+vs. this source — on your machine in one command, before you invest in a build.
 
 ## 22. License
 

@@ -11,13 +11,15 @@
 
 #include "softwaredim.h"
 
-#include "libkwineffects/glframebuffer.h"
-#include "libkwineffects/glshader.h"
-#include "libkwineffects/glshadermanager.h"
-#include "libkwineffects/gltexture.h"
-#include "libkwineffects/kwinglobals.h"
-#include "libkwineffects/rendertarget.h"
-#include "libkwineffects/renderviewport.h"
+#include <core/colorspace.h>
+#include <core/rendertarget.h>
+#include <core/renderviewport.h>
+#include <effect/effecthandler.h>
+#include <effect/globals.h>
+#include <opengl/glframebuffer.h>
+#include <opengl/glshader.h>
+#include <opengl/glshadermanager.h>
+#include <opengl/gltexture.h>
 
 #include <KConfigGroup>
 #include <KGlobalAccel>
@@ -26,6 +28,7 @@
 #include <QAction>
 #include <QKeySequence>
 #include <QLoggingCategory>
+#include <QPoint>
 
 #include <epoxy/gl.h>
 
@@ -60,22 +63,27 @@ SoftwareDimEffect::SoftwareDimEffect()
 {
     ensureResources();
 
-    // Build the shader. ShaderTrait::MapTexture makes KWin inject the
-    // `sampler` uniform and bind the texture unit for us.
+    // Build the shader. ShaderTrait::MapTexture selects the generated vertex
+    // shader variant that feeds the `texcoord0` varying; the fragment shader
+    // itself must declare `sampler` / `texcoord0` / `fragColor` (KWin prepends
+    // only `#version`, precision qualifiers and TRAIT_* defines — see
+    // GLShader::preprocess in src/opengl/glshader.cpp).
     // Pattern: src/plugins/invert/invert.cpp (KWin 6.7):
     //   ShaderManager::instance()->generateShaderFromFile(
     //       ShaderTrait::MapTexture, QString(), QStringLiteral(":/effects/invert/shaders/invert.frag"));
-    // KWin appends "_core" before the extension when the context is desktop
-    // OpenGL, which is why both .frag files are shipped in the .qrc.
+    // The file is loaded verbatim: 6.7.5's generateShaderFromFile does not
+    // resolve a "_core" variant, so software_dim.frag is the shader on every
+    // context. Both files stay in the .qrc so the pair keeps working if a
+    // future loader honours the documented "_core" suffix again.
     m_shader = ShaderManager::instance()->generateShaderFromFile(
         ShaderTrait::MapTexture, QString(), QStringLiteral(":/softwaredim/shaders/software_dim.frag"));
 
-    if (!m_shader || !m_shader->isValid()) {
+    if (!m_shader) {
         // Fail safe: m_valid stays false, every hook becomes a pass-through
         // and the desktop keeps rendering exactly as before. The effect never
-        // blanks the screen on a shader error.
+        // blanks the screen on a shader error. (generateShaderFromFile returns
+        // nullptr when the file cannot be read or the program fails to link.)
         qCCritical(KWIN_SOFTWARE_DIM) << "Failed to compile the dim shader; the effect will stay inert.";
-        m_shader.reset();
         return;
     }
 
@@ -152,11 +160,11 @@ void SoftwareDimEffect::loadConfig()
     m_enabled = group.readEntry(QStringLiteral("Enabled"), false);
 
     // Clamp anything hand-edited in kwinrc into the supported range.
-    m_dimAmount = qBound(kDimMin, m_dimAmount, kDimMax);
     if (m_dimStep <= 0.0 || m_dimStep > 0.5) {
         m_dimStep = kDefaultDimStep;
     }
     m_dimMin = qBound(0.01, m_dimMin, kDimMax);
+    m_dimAmount = qBound(m_dimMin, m_dimAmount, kDimMax);
 }
 
 void SoftwareDimEffect::storeConfig()
@@ -252,11 +260,11 @@ int SoftwareDimEffect::requestedEffectChainPosition() const
     return 99;
 }
 
-bool SoftwareDimEffect::ensureOffscreen(const RenderViewport &viewport)
+bool SoftwareDimEffect::ensureOffscreen(const RenderTarget &renderTarget, const RenderViewport &viewport)
 {
-    // Device pixels: renderRect() is in logical coordinates, scale() is the
-    // output's fractional scaling factor.
-    const QSize size = (QSizeF(viewport.renderRect().size()) * viewport.scale()).toSize();
+    // Device pixels, including any output transform (rotation swaps W/H).
+    // Pattern: ZoomEffect::ensureOffscreenData() in src/plugins/zoom/zoom.cpp.
+    const QSize size = viewport.deviceSize();
     if (size.isEmpty()) {
         // Bug 485884: allocating a 0x0 texture produced
         // GL_INVALID_VALUE / GL_FRAMEBUFFER_INCOMPLETE_ATTACHMENT and a black
@@ -270,14 +278,18 @@ bool SoftwareDimEffect::ensureOffscreen(const RenderViewport &viewport)
 
     releaseOffscreen();
 
-    m_texture = GLTexture::allocate(GL_RGBA8, size);
+    // HDR outputs need float precision; SDR is fine with 8 bit per channel.
+    // Same selection as ZoomEffect::ensureOffscreenData().
+    const GLenum textureFormat = renderTarget.colorDescription() == ColorDescription::sRGB ? GL_RGBA8 : GL_RGBA16F;
+    m_texture = GLTexture::allocate(textureFormat, size);
     if (!m_texture) {
         return false;
     }
     m_texture->setFilter(GL_LINEAR);
+    m_texture->setWrapMode(GL_CLAMP_TO_EDGE);
 
-    m_framebuffer = GLFramebuffer::create(m_texture.get());
-    if (!m_framebuffer || !m_framebuffer->valid()) {
+    m_framebuffer = std::make_unique<GLFramebuffer>(m_texture.get());
+    if (!m_framebuffer->valid()) {
         releaseOffscreen();
         return false;
     }
@@ -305,19 +317,19 @@ void SoftwareDimEffect::releaseOffscreen()
 void SoftwareDimEffect::paintScreen(const RenderTarget &renderTarget,
                                     const RenderViewport &viewport,
                                     int mask,
-                                    const QRegion &region,
-                                    Output *screen)
+                                    const Region &deviceRegion,
+                                    LogicalOutput *screen)
 {
     // ---------------------------------------------------------------- pass 0
     // Anything unusable falls back to plain compositing. The desktop is never
     // left without content.
     if (!m_valid || !m_shader) {
-        effects->paintScreen(renderTarget, viewport, mask, region, screen);
+        effects->paintScreen(renderTarget, viewport, mask, deviceRegion, screen);
         return;
     }
 
-    if (!ensureOffscreen(viewport)) {
-        effects->paintScreen(renderTarget, viewport, mask, region, screen);
+    if (!ensureOffscreen(renderTarget, viewport)) {
+        effects->paintScreen(renderTarget, viewport, mask, deviceRegion, screen);
         return;
     }
 
@@ -331,12 +343,13 @@ void SoftwareDimEffect::paintScreen(const RenderTarget &renderTarget,
     // documented KWin 6 pattern (see Zamundaaa, "Porting away from
     // gbm_surface": "if an effect wants to override the properties now, it
     // just creates its own RenderTarget and RenderViewport and passes that to
-    // rendering methods").
+    // rendering methods"). Same call shape as ZoomEffect::paintScreen() in
+    // src/plugins/zoom/zoom.cpp, including the QPoint() render offset.
     const RenderTarget offscreenTarget(m_framebuffer.get(), renderTarget.colorDescription());
-    const RenderViewport offscreenViewport(viewport.renderRect(), viewport.scale(), offscreenTarget);
+    const RenderViewport offscreenViewport(viewport.renderRect(), viewport.scale(), offscreenTarget, QPoint());
 
     GLFramebuffer::pushFramebuffer(m_framebuffer.get());
-    effects->paintScreen(offscreenTarget, offscreenViewport, mask, region, screen);
+    effects->paintScreen(offscreenTarget, offscreenViewport, mask, deviceRegion, screen);
     GLFramebuffer::popFramebuffer();
 
     // ---------------------------------------------------------------- pass 2
@@ -349,7 +362,7 @@ void SoftwareDimEffect::paintScreen(const RenderTarget &renderTarget,
     ShaderManager::instance()->pushShader(m_shader.get());
     m_shader->setUniform(GLShader::Mat4Uniform::ModelViewProjectionMatrix, viewport.projectionMatrix());
     m_shader->setUniform("dimAmount", float(m_dimAmount));
-    m_texture->render(QSizeF(viewport.renderRect().size()) * viewport.scale());
+    m_texture->render(viewport.renderRect().size() * viewport.scale());
     ShaderManager::instance()->popShader();
 
     if (blendWasEnabled) {

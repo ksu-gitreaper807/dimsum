@@ -14,7 +14,11 @@
 
 #pragma once
 
-#include "libkwineffects/kwineffects.h"
+// KWin 6.7 installs its effect API under <prefix>/include/kwin/ and exports
+// that directory as the INTERFACE include path of the KWin::kwin target, so
+// consumers include the headers without the leading "kwin/":
+//   #include <effect/effect.h>   ->  /usr/include/kwin/effect/effect.h
+#include <effect/effect.h>
 
 #include <QSize>
 #include <memory>
@@ -27,6 +31,7 @@ namespace KWin
 class GLFramebuffer;
 class GLShader;
 class GLTexture;
+class LogicalOutput;
 class RenderTarget;
 class RenderViewport;
 
@@ -62,14 +67,15 @@ public:
     /**
      * The compositor-wide hook. Called once per output, per frame.
      *
-     * Signature matches KWin 6.7 (paintScreen returns void; it returns
-     * [[nodiscard]] bool from KWin 6.7.90 / Plasma 6.8 onwards).
+     * Signature matches KWin 6.7.x: the painted region is a KWin::Region in
+     * device pixels and the output is a LogicalOutput. (KWin 6.7.90 / Plasma
+     * 6.8 additionally changes the return type to [[nodiscard]] bool.)
      */
     void paintScreen(const RenderTarget &renderTarget,
                      const RenderViewport &viewport,
                      int mask,
-                     const QRegion &region,
-                     Output *screen) override;
+                     const Region &deviceRegion,
+                     LogicalOutput *screen) override;
 
     bool isActive() const override;
 
@@ -103,7 +109,7 @@ private:
     void applyDimAmount(qreal amount);
 
     /** Allocates/reallocates the offscreen texture + FBO for @p viewport. */
-    bool ensureOffscreen(const RenderViewport &viewport);
+    bool ensureOffscreen(const RenderTarget &renderTarget, const RenderViewport &viewport);
     void releaseOffscreen();
 
     std::unique_ptr<GLShader> m_shader;

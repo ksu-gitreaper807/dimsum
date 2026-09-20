@@ -26,11 +26,20 @@ pause() { [[ "$QUICK" == "--quick" ]] && return 0; read -r -p "  $* [Enter] " _;
 # --------------------------------------------------------------------------
 stage "Stage 1 — plugin is installed where KWin looks"
 
+# KWin 6 loads effect plugins from <qt plugin dir>/kwin/effects/plugins.
+plugindirs=()
+if command -v qtpaths6 >/dev/null 2>&1; then
+    plugindirs+=("$(qtpaths6 --query QT_INSTALL_PLUGINS 2>/dev/null)/kwin/effects/plugins")
+elif command -v qmake6 >/dev/null 2>&1; then
+    plugindirs+=("$(qmake6 -query QT_INSTALL_PLUGINS 2>/dev/null)/kwin/effects/plugins")
+fi
+plugindirs+=(/usr/lib/qt6/plugins/kwin/effects/plugins
+             /usr/lib64/qt6/plugins/kwin/effects/plugins
+             /usr/lib/x86_64-linux-gnu/qt6/plugins/kwin/effects/plugins
+             "$HOME/.local/lib/qt6/plugins/kwin/effects/plugins")
+
 found=""
-for d in /usr/lib/qt6/plugins/kwin/effects/lib \
-         /usr/lib64/qt6/plugins/kwin/effects/lib \
-         /usr/lib/x86_64-linux-gnu/qt6/plugins/kwin/effects/lib \
-         "$HOME/.local/lib/qt6/plugins/kwin/effects/lib"; do
+for d in "${plugindirs[@]}"; do
     for f in "$d/$ID.so" "$d/lib$ID.so"; do
         [[ -e "$f" ]] && { found="$f"; break 2; }
     done
