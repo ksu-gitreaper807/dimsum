@@ -51,6 +51,20 @@ cmake --build build --parallel "${VERBOSE}"
 
 echo
 echo "==> Built:"
-ls -l build/kwin4_effect_software_dim.so
+# KDECMakeSettings may place the library in build/bin/ or build/lib/; search
+# all likely locations.
+so_file=$(find build -maxdepth 3 -name kwin4_effect_software_dim.so -type f | head -n 1)
+if [[ -n "$so_file" ]]; then
+    ls -l "$so_file"
+    # Ensure the expected path also exists for scripts that hardcode it
+    if [[ "$so_file" != "build/kwin4_effect_software_dim.so" ]]; then
+        echo "    (also linking to build/kwin4_effect_software_dim.so for compatibility)"
+        ln -sf "$(realpath --relative-to=build "$so_file")" build/kwin4_effect_software_dim.so 2>/dev/null || cp "$so_file" build/kwin4_effect_software_dim.so
+    fi
+else
+    echo "!! Could not find kwin4_effect_software_dim.so under build/" >&2
+    find build -name "*.so" -type f | head -n 20
+    exit 1
+fi
 echo
 echo "Next:  ./scripts/install.sh"

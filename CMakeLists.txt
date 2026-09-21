@@ -156,9 +156,17 @@ add_library(kwin4_effect_software_dim MODULE ${softwaredim_SOURCES})
 
 # KWin's own effect libraries are named kwin4_effect_<id>.so with no "lib"
 # prefix; keep that convention so the plugin sits next to the built-ins.
+# KDE's KDECMakeSettings sets CMAKE_LIBRARY_OUTPUT_DIRECTORY to bin/ or lib/,
+# which confuses the build scripts that expect build/*.so — force it to the
+# build root for consistency.
 set_target_properties(kwin4_effect_software_dim PROPERTIES
     PREFIX ""
     OUTPUT_NAME "kwin4_effect_software_dim"
+    LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}"
+    LIBRARY_OUTPUT_DIRECTORY_DEBUG "${CMAKE_BINARY_DIR}"
+    LIBRARY_OUTPUT_DIRECTORY_RELEASE "${CMAKE_BINARY_DIR}"
+    LIBRARY_OUTPUT_DIRECTORY_RELWITHDEBINFO "${CMAKE_BINARY_DIR}"
+    LIBRARY_OUTPUT_DIRECTORY_MINSIZEREL "${CMAKE_BINARY_DIR}"
 )
 
 target_link_libraries(kwin4_effect_software_dim PRIVATE

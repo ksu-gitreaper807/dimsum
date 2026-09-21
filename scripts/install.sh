@@ -16,9 +16,16 @@ set -euo pipefail
 
 cd "$(dirname "$0")/.."
 
-if [[ ! -f build/kwin4_effect_software_dim.so ]]; then
+so_file=$(find build -maxdepth 3 -name kwin4_effect_software_dim.so -type f | head -n 1)
+if [[ -z "$so_file" ]]; then
     echo "==> No build found, building first"
     ./scripts/build.sh
+    so_file=$(find build -maxdepth 3 -name kwin4_effect_software_dim.so -type f | head -n 1)
+fi
+
+if [[ -z "$so_file" ]]; then
+    echo "!! Build did not produce kwin4_effect_software_dim.so" >&2
+    exit 1
 fi
 
 # Ask the already-configured build where it intends to install.

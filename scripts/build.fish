@@ -64,7 +64,20 @@ or exit $status
 
 echo
 echo "==> Built:"
-ls -l build/kwin4_effect_software_dim.so
-or exit $status
+# KDECMakeSettings may place the library in build/bin/ or build/lib/; search
+# all likely locations.
+set so_file (find build -maxdepth 3 -name kwin4_effect_software_dim.so -type f | head -n 1)
+if test -n "$so_file"
+    ls -l "$so_file"
+    if test "$so_file" != "build/kwin4_effect_software_dim.so"
+        echo "    (also linking to build/kwin4_effect_software_dim.so for compatibility)"
+        # fish: try symlink, fallback to copy
+        ln -sf (realpath --relative-to=build "$so_file" 2>/dev/null; or echo "$so_file") build/kwin4_effect_software_dim.so 2>/dev/null; or cp "$so_file" build/kwin4_effect_software_dim.so
+    end
+else
+    echo "!! Could not find kwin4_effect_software_dim.so under build/" >&2
+    find build -name "*.so" -type f | head -n 20
+    exit 1
+end
 echo
 echo "Next:  ./scripts/install.sh"
