@@ -65,24 +65,77 @@ find_package(KF6 ${KF_MIN_VERSION} REQUIRED COMPONENTS Config CoreAddons GlobalA
 # the `KWin` CMake package (KWinConfig.cmake), with headers under
 # <prefix>/include/kwin/{effect,core,opengl,...}. On Arch this comes from the
 # `kwin` package itself; on Debian/Ubuntu from `kwin-dev`.
+#
+# KWinConfig.cmake itself does find_dependency() for Qt6Quick, KF6WindowSystem,
+# Wayland, epoxy, Libdrm and Vulkan. If any of those are missing (e.g.
+# vulkan-headers on Arch, which is a make-dep of kwin but not a runtime dep),
+# find_package(KWin) will fail even though kwin is installed.
+# We first try the normal package, and if that does not provide KWin::kwin,
+# we fall back to manually locating the headers + libkwin.so and creating an
+# imported target ourselves — enough to build this effect.
 find_package(KWin CONFIG QUIET)
+
+if(NOT TARGET KWin::kwin)
+    message(STATUS "KWin::kwin target not found via KWinConfig.cmake, trying fallback manual detection...")
+    # Show the real error from KWinConfig.cmake (e.g. missing Vulkan) by
+    # re-running without QUIET.
+    find_package(KWin CONFIG)
+    if(NOT TARGET KWin::kwin)
+        find_path(KWIN_FALLBACK_INCLUDE_DIR
+            NAMES kwin/effect/effect.h
+            PATHS /usr/include /usr/local/include /usr/include/x86_64-linux-gnu
+            NO_DEFAULT_PATH
+        )
+        if(NOT KWIN_FALLBACK_INCLUDE_DIR)
+            find_path(KWIN_FALLBACK_INCLUDE_DIR NAMES kwin/effect/effect.h)
+        endif()
+        find_library(KWIN_FALLBACK_LIBRARY NAMES kwin libkwin
+            PATHS /usr/lib /usr/lib64 /usr/lib/x86_64-linux-gnu
+        )
+        if(KWIN_FALLBACK_INCLUDE_DIR AND KWIN_FALLBACK_LIBRARY)
+            message(STATUS "Fallback: found KWin headers at ${KWIN_FALLBACK_INCLUDE_DIR} and library at ${KWIN_FALLBACK_LIBRARY}")
+            add_library(KWin::kwin UNKNOWN IMPORTED)
+            set_target_properties(KWin::kwin PROPERTIES
+                IMPORTED_LOCATION "${KWIN_FALLBACK_LIBRARY}"
+                INTERFACE_INCLUDE_DIRECTORIES "${KWIN_FALLBACK_INCLUDE_DIR}"
+            )
+            # KWin's headers need these as well; if they are missing the build
+            # will still fail, but with a more obvious error.
+            find_package(Wayland QUIET COMPONENTS Server)
+            if(TARGET Wayland::Server)
+                set_property(TARGET KWin::kwin APPEND PROPERTY INTERFACE_LINK_LIBRARIES Wayland::Server)
+            endif()
+        endif()
+    endif()
+endif()
 
 if(NOT TARGET KWin::kwin)
     message(FATAL_ERROR
         "Could not find KWin's effect development files (KWin::kwin target).\n"
+        "The KWin CMake package was found at ${KWin_DIR} but did not provide KWin::kwin,\n"
+        "most often because one of its own dependencies is missing (check the lines above\n"
+        "for 'Could NOT find ...'). On Arch, kwin's make-deps include vulkan-headers,\n"
+        "wayland-protocols, plasma-wayland-protocols which are NOT pulled as runtime deps.\n"
         "Install them and re-run cmake. Arch has no -dev split, so `kwin` alone is\n"
         "enough there (and note Arch uses kconfig, not kf6-kconfig):\n"
         "  Arch / CachyOS : sudo pacman -S --needed cmake extra-cmake-modules \\\n"
-        "                       qt6-tools kwin \\\n"
+        "                       qt6-tools kwin vulkan-headers wayland wayland-protocols \\\n"
+        "                       plasma-wayland-protocols libdrm \\\n"
         "                       kconfig kcoreaddons kglobalaccel libepoxy qt6-base\n"
         "  Debian / Ubuntu: sudo apt install cmake extra-cmake-modules pkg-config \\\n"
-        "                       kwin-dev qt6-base-dev libepoxy-dev \\\n"
-        "                       libkf6config-dev libkf6coreaddons-dev libkf6globalaccel-dev\n"
+        "                       kwin-dev qt6-base-dev libepoxy-dev libwayland-dev \\\n"
+        "                       libvulkan-dev libdrm-dev \\\n"
+        "                       libkf6config-dev libkf6coreaddons-dev libkf6globalaccel-dev \\\n"
+        "                       libkf6windowsystem-dev\n"
         "  Fedora         : sudo dnf install cmake extra-cmake-modules pkgconf-pkg-config \\\n"
-        "                       kwin-devel qt6-qtbase-devel libepoxy-devel \\\n"
-        "                       kf6-kconfig-devel kf6-kcoreaddons-devel kf6-kglobalaccel-devel\n"
+        "                       kwin-devel qt6-qtbase-devel libepoxy-devel wayland-devel \\\n"
+        "                       vulkan-headers libdrm-devel \\\n"
+        "                       kf6-kconfig-devel kf6-kcoreaddons-devel kf6-kglobalaccel-devel \\\n"
+        "                       kf6-kwindowsystem-devel\n"
         "If they are installed but not found, point cmake at them:\n"
-        "  cmake -B build -DKWin_DIR=/usr/lib/cmake/KWin\n")
+        "  cmake -B build -DKWin_DIR=/usr/lib/cmake/KWin\n"
+        "Or bypass KWinConfig.cmake entirely by ensuring /usr/include/kwin and libkwin.so exist:\n"
+        "  ls /usr/include/kwin/effect/effect.h && ls /usr/lib/libkwin.so\n")
 endif()
 
 # libepoxy provides the GL headers (epoxy/gl.h) that KWin's own effects use.

@@ -148,13 +148,23 @@ Dependencies (Arch / CachyOS):
 
 ```fish
 sudo pacman -S --needed base-devel cmake extra-cmake-modules qt6-tools kwin \
-                        kconfig kcoreaddons kglobalaccel \
-                        libepoxy qt6-base
+                        kconfig kcoreaddons kglobalaccel kwindowsystem \
+                        libepoxy qt6-base \
+                        vulkan-headers wayland wayland-protocols \
+                        plasma-wayland-protocols libdrm
 ```
+
+`vulkan-headers`, `wayland-protocols`, `plasma-wayland-protocols`, `libdrm` and
+`wayland` are **make** dependencies of `kwin` on Arch — they are not pulled as
+runtime deps, but `KWinConfig.cmake` does `find_dependency(Vulkan)`,
+`find_dependency(Wayland)`, etc., so you need them to *build* against KWin.
+If you see `Could NOT find WrapVulkanHeaders (missing: Vulkan_INCLUDE_DIR)`,
+install `vulkan-headers`.
 
 Arch does **not** use a `kf6-` prefix — that is Fedora's convention, and pacman
 answers it with `error: target not found`. On Arch `kf6` is a *group*, and the
-individual framework packages are `kconfig`, `kcoreaddons`, `kglobalaccel`.
+individual framework packages are `kconfig`, `kcoreaddons`, `kglobalaccel`,
+`kwindowsystem`.
 
 Arch also has no `-dev` package split, so `kwin` itself provides the effect
 development files — the `KWin` CMake config (`KWinConfig.cmake`, exporting the
@@ -174,13 +184,17 @@ Other distributions:
 ```bash
 # Debian / Ubuntu / Neon
 sudo apt install build-essential cmake extra-cmake-modules pkg-config \
-    kwin-dev qt6-base-dev qt6-base-dev-tools libepoxy-dev \
-    libkf6config-dev libkf6coreaddons-dev libkf6globalaccel-dev
+    kwin-dev qt6-base-dev qt6-base-dev-tools libepoxy-dev libwayland-dev \
+    libvulkan-dev libdrm-dev \
+    libkf6config-dev libkf6coreaddons-dev libkf6globalaccel-dev \
+    libkf6windowsystem-dev
 
 # Fedora
 sudo dnf install gcc-c++ cmake extra-cmake-modules pkgconf-pkg-config \
-    kwin-devel qt6-qtbase-devel libepoxy-devel \
-    kf6-kconfig-devel kf6-kcoreaddons-devel kf6-kglobalaccel-devel
+    kwin-devel qt6-qtbase-devel libepoxy-devel wayland-devel \
+    vulkan-headers libdrm-devel \
+    kf6-kconfig-devel kf6-kcoreaddons-devel kf6-kglobalaccel-devel \
+    kf6-kwindowsystem-devel
 ```
 
 Then, from the repository root (where this README lives):
@@ -389,6 +403,34 @@ cmake --build build
 
 Ensure `extra-cmake-modules` is >= 6.0 (`pacman -Q extra-cmake-modules` /
 `apt show extra-cmake-modules`). See also <https://github.com/KDAB/GammaRay/issues/742>.
+
+**CMake configure fails with `Could not find KWin's effect development files (KWin::kwin target)` even though kwin is installed.**
+
+`KWinConfig.cmake` itself calls `find_dependency()` for `Vulkan`, `Wayland`,
+`Libdrm`, `Qt6Quick`, `KF6WindowSystem`, etc. On Arch those are *make* deps of
+`kwin`, not runtime deps, so `kwin` can be installed without them, but
+`find_package(KWin)` will fail. The line just above the error tells you which
+one is missing, e.g.:
+
+```text
+-- Could NOT find WrapVulkanHeaders (missing: Vulkan_INCLUDE_DIR)
+```
+
+Fix:
+
+```fish
+sudo pacman -S vulkan-headers wayland wayland-protocols plasma-wayland-protocols libdrm kwindowsystem
+# Debian/Ubuntu:
+sudo apt install libvulkan-dev libwayland-dev libdrm-dev libkf6windowsystem-dev
+# Fedora:
+sudo dnf install vulkan-headers wayland-devel libdrm-devel kf6-kwindowsystem-devel
+rm -rf build
+./scripts/build.fish
+```
+
+This tree now also has a fallback that manually creates `KWin::kwin` from
+`/usr/include/kwin` + `/usr/lib/libkwin.so` if `KWinConfig.cmake` fails, but
+installing the missing headers is still the correct fix.
 
 **Shader fails to compile** (`kwin_effect_software_dim: Failed to compile the
 dim shader` in the journal, plus a numbered source dump from KWin under the
