@@ -183,10 +183,9 @@ sudo dnf install gcc-c++ cmake extra-cmake-modules pkgconf-pkg-config \
     kf6-kconfig-devel kf6-kcoreaddons-devel kf6-kglobalaccel-devel
 ```
 
-Then:
+Then, from the repository root (where this README lives):
 
 ```fish
-cd dimsum
 ./scripts/verify-api.fish    # <-- run this first, see next section
 ./scripts/build.fish
 ```
@@ -194,12 +193,15 @@ cd dimsum
 Fish-native versions are provided alongside the original Bash scripts; use the
 `.fish` files when running from Fish, or the `.sh` files when running from Bash.
 
-Or by hand:
+Or by hand (also from the repository root):
 
 ```fish
-cmake -B build -DCMAKE_BUILD_TYPE=Release
+cmake -B build -DCMAKE_BUILD_TYPE=Release -DQT_MAJOR_VERSION=6 -DKF_MAJOR_VERSION=6 -DBUILD_WITH_QT6=ON
 cmake --build build
 ```
+
+If you previously tried `cd dimsum` and got `cd: The directory 'dimsum' does not exist`,
+you are already inside the repository — just run `./scripts/...` directly.
 
 ## 9. `scripts/verify-api.{sh,fish}` — read this before you build
 
@@ -369,6 +371,24 @@ and the pattern. The likely candidates and what to do:
 | `GLFramebuffer(GLTexture *)` | constructor replaced by a factory again | `ensureOffscreen()` |
 | `pushShader(GLShader *)` | overload takes `std::shared_ptr<GLShader>` | make `m_shader` a `shared_ptr` in the header |
 | `KWIN_EFFECT_FACTORY macro` | — | `src/main.cpp` falls back to `K_PLUGIN_FACTORY_WITH_JSON`, which **builds but will not load**: KWin 6.7.5 stamps its effect plugins with the IID `org.kde.kwin.EffectPluginFactory6.7.5` (6.7.90 uses `…Factory6.7.90`), and a plain KF6 factory carries none. Build against the installed `kwin` headers so the macro branch is taken |
+
+**CMake configure fails with `qt_generate_foreign_qml_types() is only available in Qt 6`.**
+
+This is ECM's `QtVersionOption` defaulting to Qt5 when `QT_MAJOR_VERSION` is not
+set before `KDECMakeSettings`. The fix is already in this tree's
+`CMakeLists.txt` (it sets `QT_MAJOR_VERSION=6` and `KF_MAJOR_VERSION=6` before
+including `KDECMakeSettings`) and in `scripts/build.{sh,fish}` (they pass
+`-DQT_MAJOR_VERSION=6 -DKF_MAJOR_VERSION=6 -DBUILD_WITH_QT6=ON`). If you still
+hit it:
+
+```fish
+rm -rf build
+cmake -B build -DCMAKE_BUILD_TYPE=Release -DQT_MAJOR_VERSION=6 -DKF_MAJOR_VERSION=6 -DBUILD_WITH_QT6=ON
+cmake --build build
+```
+
+Ensure `extra-cmake-modules` is >= 6.0 (`pacman -Q extra-cmake-modules` /
+`apt show extra-cmake-modules`). See also <https://github.com/KDAB/GammaRay/issues/742>.
 
 **Shader fails to compile** (`kwin_effect_software_dim: Failed to compile the
 dim shader` in the journal, plus a numbered source dump from KWin under the

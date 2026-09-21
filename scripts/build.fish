@@ -35,7 +35,13 @@ set build_type Release
 if set -q CMAKE_BUILD_TYPE; and test -n "$CMAKE_BUILD_TYPE"
     set build_type "$CMAKE_BUILD_TYPE"
 end
-cmake -B build -DCMAKE_BUILD_TYPE="$build_type"
+# Explicitly force Qt6/KF6 - ECM's QtVersionOption defaults to Qt5 if
+# QT_MAJOR_VERSION is not set early enough (see CMakeLists.txt comment).
+cmake -B build \
+  -DCMAKE_BUILD_TYPE="$build_type" \
+  -DQT_MAJOR_VERSION=6 \
+  -DKF_MAJOR_VERSION=6 \
+  -DBUILD_WITH_QT6=ON
 or exit $status
 
 echo

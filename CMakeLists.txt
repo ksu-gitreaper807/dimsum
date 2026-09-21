@@ -35,15 +35,31 @@ endif()
 # Dependencies
 # --------------------------------------------------------------------------
 
-find_package(ECM REQUIRED NO_MODULE)
+find_package(ECM 6.0.0 REQUIRED NO_MODULE)
 set(CMAKE_MODULE_PATH ${ECM_MODULE_PATH} ${CMAKE_MODULE_PATH})
+
+# Must be set *before* KDECMakeSettings / KDECompilerSettings, otherwise
+# ECM's QtVersionOption defaults to Qt5 and KF6Config's dependency on
+# Qt6Qml then errors with:
+#   CMake Error at Qt6QmlMacros.cmake: qt_generate_foreign_qml_types() is only available in Qt 6.
+# See https://github.com/KDAB/GammaRay/issues/742
+set(QT_MAJOR_VERSION 6)
+set(KF_MAJOR_VERSION 6)
+set(QT_MIN_VERSION "6.6.0")
+set(KF_MIN_VERSION "6.0.0")
+set(KF6_MIN_VERSION "6.0.0")
 
 include(KDEInstallDirs)
 include(KDECMakeSettings)
 include(KDECompilerSettings NO_POLICY_SCOPE)
 
-find_package(Qt6 REQUIRED COMPONENTS Core Gui)
-find_package(KF6 REQUIRED COMPONENTS Config CoreAddons GlobalAccel)
+# KDECompilerSettings may reset the standard; enforce C++20 after it.
+set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
+
+find_package(Qt6 ${QT_MIN_VERSION} REQUIRED COMPONENTS Core Gui)
+find_package(KF6 ${KF_MIN_VERSION} REQUIRED COMPONENTS Config CoreAddons GlobalAccel)
 
 # KWin 6 exports its effect API as the single linkable target KWin::kwin from
 # the `KWin` CMake package (KWinConfig.cmake), with headers under

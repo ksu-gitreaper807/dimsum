@@ -30,7 +30,13 @@ fi
 
 echo
 echo "==> Configuring"
-cmake -B build -DCMAKE_BUILD_TYPE="${CMAKE_BUILD_TYPE:-Release}"
+# Explicitly force Qt6/KF6 - ECM's QtVersionOption defaults to Qt5 if
+# QT_MAJOR_VERSION is not set early enough (see CMakeLists.txt comment).
+cmake -B build \
+  -DCMAKE_BUILD_TYPE="${CMAKE_BUILD_TYPE:-Release}" \
+  -DQT_MAJOR_VERSION=6 \
+  -DKF_MAJOR_VERSION=6 \
+  -DBUILD_WITH_QT6=ON
 
 echo
 echo "==> Configured against"
