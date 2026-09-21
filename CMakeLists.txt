@@ -196,11 +196,15 @@ install(TARGETS kwin4_effect_software_dim
     LIBRARY DESTINATION "${KWIN_EFFECTS_INSTALL_DIR}"
 )
 
-# Keep a copy of the metadata next to the build for reference; the copy
-# compiled into the .so is the authoritative one.
-install(FILES src/metadata.json
-    DESTINATION "${KDE_INSTALL_DATADIR}/kwin/effects/metadata.json/kwin4_effect_software_dim"
-)
+# NOTE: Do NOT install metadata.json to
+#   ${KDE_INSTALL_DATADIR}/kwin/effects/metadata.json/...
+# That path is for KPackage (QML) effects, and installing a native plugin's
+# metadata there makes KWin try to load it as a KPackage, spamming:
+#   KPackageStructure ... does not match requested format "KWin/Effect"
+#   The plugin ... explicitly states an 'Id' in the embedded metadata.
+# The authoritative metadata is already embedded in the .so via
+# KWIN_EFFECT_FACTORY_SUPPORTED_ENABLED. If you want a reference copy, it
+# lives in src/metadata.json in the source tree.
 
 # --------------------------------------------------------------------------
 # Report

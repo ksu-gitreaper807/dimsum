@@ -1,6 +1,5 @@
 {
     "KPlugin": {
-        "Id": "kwin4_effect_software_dim",
         "Name": "Software Dim",
         "Description": "Dims the composited desktop image below the hardware backlight minimum by multiplying the final output by a configurable factor.",
         "Category": "Appearance",
