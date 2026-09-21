@@ -25,6 +25,7 @@ application.
 
 * Toggle: `Meta+Alt+D`
 * Brighter / darker: `Meta+Alt+Up` / `Meta+Alt+Down` (step `0.05`, floor `0.05`)
+* Slider popup: `Meta+Alt+S` — draggable, shows current level, auto-hides, `Esc` to close
 
 ## 2. Why hardware brightness is not enough
 
@@ -306,11 +307,37 @@ way KWin's own Invert effect does), so they appear in System Settings → Keyboa
 | `Meta+Alt+D` | `Software Dim` | Toggle dimmer on/off (`setAutoRepeat(false)` — one press is one toggle) |
 | `Meta+Alt+Up` | `Software Dim: Increase Brightness` | `dimAmount += 0.05`, clamped to `1.00` |
 | `Meta+Alt+Down` | `Software Dim: Decrease Brightness` | `dimAmount -= 0.05`, clamped to `0.05` |
+| `Meta+Alt+S` | `Software Dim: Show Slider` | Popup slider — draggable, real-time, auto-hides after 3.5s, `Esc` to close |
 
 Rebinding in System Settings sticks; the code only sets defaults.
 
 The effect starts **disabled**. Loading it does not dim your screen until you
 press `Meta+Alt+D` — a dimmer that turns itself on at login is a bad surprise.
+
+### Slider popup (`dimsum-slider`)
+
+A separate Qt Widgets app (`/usr/bin/dimsum-slider`) that can be launched:
+
+* via the `Meta+Alt+S` global shortcut (registered by the effect itself, launches the binary with `QProcess::startDetached`)
+* or manually: `dimsum-slider` from any shell (works from fish too)
+
+Features:
+
+* Frameless, always-on-top, centered, dark translucent with rounded corners
+* `QSlider` from `DimMin` (default 5%) to 100%, label shows `%`
+* Checkbox to enable/disable dimmer
+* Drag anywhere on the popup to move it
+* Real-time dimming: on drag it writes `DimAmount`/`Enabled` to `kwinrc` and calls `org.kde.KWin /KWin reconfigure` via D-Bus
+* Auto-hides after 3.5s of no interaction, or on `Esc` / click outside (quits app)
+
+The binary is built alongside the effect:
+
+```fish
+cmake -B build -DQT_MAJOR_VERSION=6 -DKF_MAJOR_VERSION=6
+cmake --build build
+./build/dimsum-slider   # test without installing
+sudo cmake --install build  # installs to /usr/bin/dimsum-slider
+```
 
 ## 12. Configuration
 
@@ -555,19 +582,23 @@ plugin and the metadata copy, and removes any leftover scripted prototype. Idemp
 ├── README.md
 ├── scripts/
 │   ├── build.sh / build.fish              # verify-api, then configure + build
-│   ├── install.sh                          # build + install + clean up the old prototype
+│   ├── install.sh / install.fish          # build + install + clean up the old prototype
 │   ├── test.sh                             # the six acceptance stages
 │   ├── uninstall.sh
 │   └── verify-api.sh / verify-api.fish     # check installed KWin headers and symbols
 └── src/
     ├── main.cpp          # plugin entry point (KWIN_EFFECT_FACTORY_*)
-    ├── metadata.json     # compiled into the .so
+    ├── metadata.json     # compiled into the .so (Id removed, see troubleshooting)
     ├── softwaredim.h
     ├── softwaredim.cpp
     ├── softwaredim.qrc
-    └── shaders/
-        ├── software_dim.frag        # the shader, on every context
-        └── software_dim_core.frag   # identical twin, kept for forward compat
+    ├── shaders/
+    │   ├── software_dim.frag        # the shader, on every context
+    │   └── software_dim_core.frag   # identical twin, kept for forward compat
+    └── slider/
+        ├── main.cpp          # dimsum-slider executable entry
+        ├── sliderpopup.h     # draggable popup with QSlider
+        └── sliderpopup.cpp   # writes kwinrc + D-Bus reconfigure
 ```
 
 ## 21. Verification status — what was checked, and what was not

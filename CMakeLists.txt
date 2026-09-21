@@ -58,7 +58,7 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
-find_package(Qt6 ${QT_MIN_VERSION} REQUIRED COMPONENTS Core Gui)
+find_package(Qt6 ${QT_MIN_VERSION} REQUIRED COMPONENTS Core Gui Widgets DBus)
 find_package(KF6 ${KF_MIN_VERSION} REQUIRED COMPONENTS Config CoreAddons GlobalAccel)
 
 # KWin 6 exports its effect API as the single linkable target KWin::kwin from
@@ -177,6 +177,36 @@ target_link_libraries(kwin4_effect_software_dim PRIVATE
     KF6::CoreAddons
     KF6::GlobalAccel
     PkgConfig::EPOXY
+)
+
+# --------------------------------------------------------------------------
+# Slider popup executable (dimsum-slider)
+# --------------------------------------------------------------------------
+
+set(slider_SOURCES
+    src/slider/main.cpp
+    src/slider/sliderpopup.cpp
+)
+
+add_executable(dimsum-slider ${slider_SOURCES})
+
+target_link_libraries(dimsum-slider PRIVATE
+    Qt::Core
+    Qt::Gui
+    Qt::Widgets
+    Qt::DBus
+    KF6::ConfigCore
+)
+
+# Place slider binary next to effect for easy finding during build
+set_target_properties(dimsum-slider PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}"
+    RUNTIME_OUTPUT_DIRECTORY_DEBUG "${CMAKE_BINARY_DIR}"
+    RUNTIME_OUTPUT_DIRECTORY_RELEASE "${CMAKE_BINARY_DIR}"
+)
+
+install(TARGETS dimsum-slider
+    RUNTIME DESTINATION "${KDE_INSTALL_BINDIR}"
 )
 
 # --------------------------------------------------------------------------

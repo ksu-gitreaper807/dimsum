@@ -107,6 +107,7 @@ private:
     void raiseBrightness();
     void lowerBrightness();
     void applyDimAmount(qreal amount);
+    void showSlider();
 
     /** Allocates/reallocates the offscreen texture + FBO for @p viewport. */
     bool ensureOffscreen(const RenderTarget &renderTarget, const RenderViewport &viewport);
@@ -126,6 +127,7 @@ private:
     QAction *m_toggleAction = nullptr;
     QAction *m_increaseAction = nullptr;
     QAction *m_decreaseAction = nullptr;
+    QAction *m_sliderAction = nullptr;
 };
 
 } // namespace KWin

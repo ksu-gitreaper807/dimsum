@@ -26,9 +26,12 @@
 #include <KSharedConfig>
 
 #include <QAction>
+#include <QFileInfo>
 #include <QKeySequence>
 #include <QLoggingCategory>
 #include <QPoint>
+#include <QProcess>
+#include <QStandardPaths>
 
 #include <epoxy/gl.h>
 
@@ -146,6 +149,12 @@ void SoftwareDimEffect::setupActions()
     m_decreaseAction->setText(QStringLiteral("Software Dim: Decrease Brightness"));
     KGlobalAccel::self()->setGlobalShortcut(m_decreaseAction, QKeySequence(Qt::META | Qt::ALT | Qt::Key_Down));
     connect(m_decreaseAction, &QAction::triggered, this, &SoftwareDimEffect::lowerBrightness);
+
+    m_sliderAction = new QAction(this);
+    m_sliderAction->setObjectName(QStringLiteral("Software Dim: Show Slider"));
+    m_sliderAction->setText(QStringLiteral("Software Dim: Show Slider"));
+    KGlobalAccel::self()->setGlobalShortcut(m_sliderAction, QKeySequence(Qt::META | Qt::ALT | Qt::Key_S));
+    connect(m_sliderAction, &QAction::triggered, this, &SoftwareDimEffect::showSlider);
 }
 
 void SoftwareDimEffect::loadConfig()
@@ -237,6 +246,52 @@ void SoftwareDimEffect::lowerBrightness()
 {
     applyDimAmount(m_dimAmount - m_dimStep);
     qCInfo(KWIN_SOFTWARE_DIM) << "dimAmount ->" << m_dimAmount;
+}
+
+void SoftwareDimEffect::showSlider()
+{
+    // Try to launch dimsum-slider from PATH, fallback to known locations.
+    // The slider is a separate Qt app that shows a draggable popup and
+    // writes to kwinrc + triggers reconfigure for real-time dimming.
+    QStringList candidates;
+    candidates << QStringLiteral("dimsum-slider");
+    // When running from build tree without install, binary is in build/
+    const QString fromPath = QStandardPaths::findExecutable(QStringLiteral("dimsum-slider"));
+    if (!fromPath.isEmpty()) {
+        candidates << fromPath;
+    }
+    // Also check build directory relative to home (for dev)
+    const QString buildPath = QStandardPaths::writableLocation(QStandardPaths::HomeLocation)
+                              + QStringLiteral("/Desktop/dimsum/build/dimsum-slider");
+    if (QFile::exists(buildPath)) {
+        candidates << buildPath;
+    }
+
+    QString exe;
+    for (const QString &c : candidates) {
+        if (c.isEmpty()) {
+            continue;
+        }
+        QString found = QStandardPaths::findExecutable(c);
+        if (!found.isEmpty()) {
+            exe = found;
+            break;
+        }
+        if (QFile::exists(c) && QFileInfo(c).isExecutable()) {
+            exe = c;
+            break;
+        }
+    }
+
+    if (exe.isEmpty()) {
+        exe = QStringLiteral("dimsum-slider");
+    }
+
+    qCInfo(KWIN_SOFTWARE_DIM) << "Launching slider:" << exe;
+    bool ok = QProcess::startDetached(exe, {});
+    if (!ok) {
+        qCWarning(KWIN_SOFTWARE_DIM) << "Failed to launch" << exe << "- is dimsum-slider installed? (cmake --install build)";
+    }
 }
 
 bool SoftwareDimEffect::isActive() const
