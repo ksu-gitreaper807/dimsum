@@ -21,6 +21,7 @@
 #include <effect/effect.h>
 
 #include <QSize>
+#include <QTimer>
 #include <memory>
 
 class QAction;
@@ -71,7 +72,7 @@ public:
      * device pixels and the output is a LogicalOutput. (KWin 6.7.90 / Plasma
      * 6.8 additionally changes the return type to [[nodiscard]] bool.)
      */
-    void paintScreen(const RenderTarget &renderTarget,
+    bool paintScreen(const RenderTarget &renderTarget,
                      const RenderViewport &viewport,
                      int mask,
                      const Region &deviceRegion,
@@ -126,6 +127,7 @@ private:
     QAction *m_toggleAction = nullptr;
     QAction *m_increaseAction = nullptr;
     QAction *m_decreaseAction = nullptr;
+    QTimer m_feedbackTimer;
 };
 
 } // namespace KWin

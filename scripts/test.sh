@@ -104,7 +104,8 @@ echo "  Press Meta+Alt+D once. The whole desktop should get visibly darker."
 pause "Done?"
 echo "  Press Meta+Alt+D again. Normal brightness should come straight back."
 pause "Done?"
-echo "  Meta+Alt+Up / Meta+Alt+Down should step the level (0.05 at a time)."
+echo "  Meta+Alt+F6 decreases and Meta+Alt+F7 increases the level by 0.05."
+echo "  Each adjustment should briefly show its direction and percentage on screen."
 pause "Done?"
 
 # --------------------------------------------------------------------------

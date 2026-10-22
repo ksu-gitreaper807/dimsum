@@ -91,12 +91,20 @@ SoftwareDimEffect::SoftwareDimEffect()
 
     loadConfig();
     setupActions();
+    m_feedbackTimer.setSingleShot(true);
+    m_feedbackTimer.setInterval(1500);
+    connect(&m_feedbackTimer, &QTimer::timeout, this, [] {
+        effects->hideOnScreenMessage();
+    });
 
     qCInfo(KWIN_SOFTWARE_DIM) << "Loaded. dimAmount =" << m_dimAmount << " enabled =" << m_enabled;
 }
 
 SoftwareDimEffect::~SoftwareDimEffect()
 {
+    if (m_feedbackTimer.isActive()) {
+        effects->hideOnScreenMessage();
+    }
     // GL objects are owned by unique_ptrs; releasing them here is safe because
     // KWin destroys effects while the OpenGL context is still current.
     releaseOffscreen();
@@ -128,6 +136,36 @@ void SoftwareDimEffect::setupActions()
     // dimmer on and off again while the key is held. The brightness actions
     // deliberately DO repeat.
 
+    // Refresh the requested bindings explicitly: saved settings can disagree
+    // with the shortcuts currently registered in the running accelerator.
+    const auto registerBrightnessShortcut = [](QAction *action, Qt::Key key, Qt::Key legacyKey) {
+        const QList<QKeySequence> shortcuts{QKeySequence(Qt::META | Qt::ALT | key)};
+        auto *accel = KGlobalAccel::self();
+        bool registered = accel->setGlobalShortcut(action, shortcuts);
+        const QList<QKeySequence> legacy{QKeySequence(Qt::META | Qt::ALT | legacyKey)};
+        if (accel->shortcut(action).isEmpty() || accel->shortcut(action) == legacy || accel->shortcut(action) == shortcuts) {
+            registered = accel->setShortcut(action, shortcuts, KGlobalAccel::NoAutoloading);
+        }
+        if (!registered) {
+            qCWarning(KWIN_SOFTWARE_DIM) << "Could not register brightness shortcut:" << action->objectName();
+        }
+    };
+
+    // Release both previous function-key bindings before swapping them, so
+    // neither action blocks the other during registration.
+    auto *accel = KGlobalAccel::self();
+    for (const auto &[name, oldKey] : {
+             std::pair{QStringLiteral("Software Dim: Increase Brightness"), Qt::Key_F6},
+             std::pair{QStringLiteral("Software Dim: Decrease Brightness"), Qt::Key_F7}}) {
+        auto *action = new QAction(this);
+        action->setObjectName(name);
+        accel->setGlobalShortcut(action, QKeySequence(Qt::META | Qt::ALT | oldKey));
+        if (accel->shortcut(action) == QList<QKeySequence>{QKeySequence(Qt::META | Qt::ALT | oldKey)}) {
+            accel->setShortcut(action, {}, KGlobalAccel::NoAutoloading);
+        }
+        delete action;
+    }
+
     m_toggleAction = new QAction(this);
     m_toggleAction->setAutoRepeat(false);
     m_toggleAction->setObjectName(QStringLiteral("Software Dim"));
@@ -138,13 +176,13 @@ void SoftwareDimEffect::setupActions()
     m_increaseAction = new QAction(this);
     m_increaseAction->setObjectName(QStringLiteral("Software Dim: Increase Brightness"));
     m_increaseAction->setText(QStringLiteral("Software Dim: Increase Brightness"));
-    KGlobalAccel::self()->setGlobalShortcut(m_increaseAction, QKeySequence(Qt::META | Qt::ALT | Qt::Key_Up));
+    registerBrightnessShortcut(m_increaseAction, Qt::Key_F7, Qt::Key_Up);
     connect(m_increaseAction, &QAction::triggered, this, &SoftwareDimEffect::raiseBrightness);
 
     m_decreaseAction = new QAction(this);
     m_decreaseAction->setObjectName(QStringLiteral("Software Dim: Decrease Brightness"));
     m_decreaseAction->setText(QStringLiteral("Software Dim: Decrease Brightness"));
-    KGlobalAccel::self()->setGlobalShortcut(m_decreaseAction, QKeySequence(Qt::META | Qt::ALT | Qt::Key_Down));
+    registerBrightnessShortcut(m_decreaseAction, Qt::Key_F6, Qt::Key_Down);
     connect(m_decreaseAction, &QAction::triggered, this, &SoftwareDimEffect::lowerBrightness);
 }
 
@@ -219,8 +257,16 @@ void SoftwareDimEffect::toggleDim()
 
 void SoftwareDimEffect::applyDimAmount(qreal amount)
 {
+    const QString direction = amount > m_dimAmount ? QStringLiteral("↑") : QStringLiteral("↓");
     m_dimAmount = qBound(m_dimMin, amount, kDimMax);
     storeConfig();
+    effects->showOnScreenMessage(
+        QStringLiteral("DimSum %1 %2%%3")
+            .arg(direction)
+            .arg(qRound(m_dimAmount * 100))
+            .arg(m_enabled ? QString() : QStringLiteral(" (dimming off)")),
+        QStringLiteral("display-brightness"));
+    m_feedbackTimer.start();
 
     if (m_enabled) {
         effects->addRepaintFull();
@@ -314,7 +360,7 @@ void SoftwareDimEffect::releaseOffscreen()
     m_textureSize = QSize();
 }
 
-void SoftwareDimEffect::paintScreen(const RenderTarget &renderTarget,
+bool SoftwareDimEffect::paintScreen(const RenderTarget &renderTarget,
                                     const RenderViewport &viewport,
                                     int mask,
                                     const Region &deviceRegion,
@@ -324,13 +370,11 @@ void SoftwareDimEffect::paintScreen(const RenderTarget &renderTarget,
     // Anything unusable falls back to plain compositing. The desktop is never
     // left without content.
     if (!m_valid || !m_shader) {
-        effects->paintScreen(renderTarget, viewport, mask, deviceRegion, screen);
-        return;
+        return effects->paintScreen(renderTarget, viewport, mask, deviceRegion, screen);
     }
 
     if (!ensureOffscreen(renderTarget, viewport)) {
-        effects->paintScreen(renderTarget, viewport, mask, deviceRegion, screen);
-        return;
+        return effects->paintScreen(renderTarget, viewport, mask, deviceRegion, screen);
     }
 
     // ---------------------------------------------------------------- pass 1
@@ -349,7 +393,7 @@ void SoftwareDimEffect::paintScreen(const RenderTarget &renderTarget,
     const RenderViewport offscreenViewport(viewport.renderRect(), viewport.scale(), offscreenTarget, QPoint());
 
     GLFramebuffer::pushFramebuffer(m_framebuffer.get());
-    effects->paintScreen(offscreenTarget, offscreenViewport, mask, deviceRegion, screen);
+    const bool painted = effects->paintScreen(offscreenTarget, offscreenViewport, mask, deviceRegion, screen);
     GLFramebuffer::popFramebuffer();
 
     // ---------------------------------------------------------------- pass 2
@@ -368,6 +412,8 @@ void SoftwareDimEffect::paintScreen(const RenderTarget &renderTarget,
     if (blendWasEnabled) {
         glEnable(GL_BLEND);
     }
+
+    return painted;
 }
 
 } // namespace KWin

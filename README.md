@@ -24,7 +24,8 @@ It is not a window. It is not an overlay surface. It does not touch
 application.
 
 * Toggle: `Meta+Alt+D`
-* Brighter / darker: `Meta+Alt+Up` / `Meta+Alt+Down` (step `0.05`, floor `0.05`)
+* Brighter / darker: `Meta+Alt+F7` / `Meta+Alt+F6` (step `0.05`, floor `0.05`)
+* Brightness shortcuts show a brief on-screen direction and percentage indicator.
 
 ## 2. Why hardware brightness is not enough
 
@@ -240,7 +241,7 @@ and line, e.g.
 
 It also prints the **actual installed `paintScreen` signature** and tells you if
 your KWin returns `[[nodiscard]] bool` (KWin 6.7.90 / Plasma 6.8) instead of
-`void` (6.7.x), which is the one change this tree would need for a newer Plasma.
+`void` (6.7.x), while newer Plasma releases return `bool`.
 
 Point it at a non-standard prefix with `KWIN_INCLUDE_ROOT=/path ./scripts/verify-api.fish`.
 
@@ -304,8 +305,8 @@ way KWin's own Invert effect does), so they appear in System Settings → Keyboa
 | Shortcut | Action id | What it does |
 |---|---|---|
 | `Meta+Alt+D` | `Software Dim` | Toggle dimmer on/off (`setAutoRepeat(false)` — one press is one toggle) |
-| `Meta+Alt+Up` | `Software Dim: Increase Brightness` | `dimAmount += 0.05`, clamped to `1.00` |
-| `Meta+Alt+Down` | `Software Dim: Decrease Brightness` | `dimAmount -= 0.05`, clamped to `0.05` |
+| `Meta+Alt+F7` | `Software Dim: Increase Brightness` | `dimAmount += 0.05`, clamped to `1.00` |
+| `Meta+Alt+F6` | `Software Dim: Decrease Brightness` | `dimAmount -= 0.05`, clamped to `0.05` |
 
 Rebinding in System Settings sticks; the code only sets defaults.
 
@@ -327,7 +328,7 @@ Enabled=false
 | Key | Default | Meaning |
 |---|---|---|
 | `DimAmount` | `0.20` | The multiply factor. `1.00` = no change, `0.05` = darkest. |
-| `DimStep` | `0.05` | How far `Meta+Alt+Up/Down` moves it. |
+| `DimStep` | `0.05` | How far `Meta+Alt+F6/F7` moves it. |
 | `DimMin` | `0.05` | Lower clamp. Hard floor is `0.01` (`0.00` would be a black screen). |
 | `Enabled` | `false` | Persisted toggle state, written on every toggle. |
 
@@ -531,7 +532,7 @@ The stages, which mirror the acceptance list:
    shares the id;
 2. `qdbus6 org.kde.KWin /Effects loadEffect kwin4_effect_software_dim` → `true`;
 3. `qdbus6 org.kde.KWin /Effects isEffectLoaded kwin4_effect_software_dim` → `true`;
-4. `Meta+Alt+D` toggles, `Meta+Alt+Up/Down` step;
+4. `Meta+Alt+D` toggles, `Meta+Alt+F6/F7` step;
 5. wallpaper, panels, windows, notifications and fullscreen apps all dim; cursor
    and input unaffected; no flicker or corruption;
 6. toggling off restores normal output; `unloadEffect` → `true` and

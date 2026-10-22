@@ -311,10 +311,9 @@ if [[ -f "$kwindir/effect/effect.h" ]]; then
         printf '%s\n' "$sig" | sed 's/^/    /'
         if grep -qE 'virtual +\[\[nodiscard\]\] +bool +paintScreen' "$kwindir/effect/effect.h"; then
             printf '\n  %sYour KWin returns bool from paintScreen (KWin >= 6.7.90 / Plasma 6.8).%s\n' "$YELLOW" "$OFF"
-            printf '  src/softwaredim.h and src/softwaredim.cpp declare it as void — change\n'
-            printf '  both to `[[nodiscard]] bool` and `return true;` at the end.\n'
+            printf "  the effect hook must use bool and return KWin's paint result.\n"
         else
-            printf '\n  %sVoid return: matches this source tree as shipped (KWin 6.7.x).%s\n' "$GREEN" "$OFF"
+            printf '\n  %sVoid return: this source tree targets the KWin 6.7.x signature.%s\n' "$GREEN" "$OFF"
         fi
     else
         printf '  %scould not extract the signature — check the header by hand.%s\n' "$YELLOW" "$OFF"
