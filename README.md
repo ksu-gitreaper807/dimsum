@@ -1,11 +1,71 @@
-# Software Dim — a compositor-wide software dimmer for KWin 6.7 (Wayland)
+# DimSum — a compositor-wide software dimmer for KWin 6.8 (Wayland)
+
+**DimSum — Not Recommended for Moths** is free, open-source software under the
+[MIT license](LICENSE). Source, issues, and releases:
+[GitHub](https://github.com/ksu-gitreaper807/dimsum).
+See [release notes](CHANGELOG.md) and the [KDE Store publishing checklist](packaging/kde-store/README.md).
+
+This is a **native C++ desktop effect**, not a scripted KPackage. Install the
+Arch/CachyOS package or build it against your installed KWin version; do not
+feed the source archive to Desktop Effects' “Get New…” installer. The binary
+release targets **x86_64 Arch/CachyOS with KWin 6.8.2** and must be rebuilt when
+KWin changes. The separate [Hyprland port](https://github.com/ksu-gitreaper807/dimsum-hyprland)
+is not included in this KDE package.
+
+Arch Linux / CachyOS: downloadable pacman packages can be built with
+`bash scripts/package-arch.sh`. See [packaging instructions](packaging/arch/README.md)
+for download, installation, KWin compatibility, and upgrades from manual installs.
 
 Multiplies the **already-rendered desktop image** by a configurable factor so you
 can go below the hardware backlight minimum.
 
 ```text
-outputRGB = renderedRGB * dimAmount        # default dimAmount = 0.20
+outputRGB = renderedRGB * dimAmount * adaptiveGain
+# dimAmount: manual ceiling (default 0.20); adaptiveGain: 0.25–1.00
 ```
+
+## Adaptive brightness (1.2)
+
+White-heavy pages are dimmed more than dark content, reducing the perceived
+brightness jump when switching between them. The manual F6/F7 level remains
+the ceiling: dark content is never boosted above it. This is a global per-display
+adjustment, not a dark-mode recolouring filter or calibrated physical luminance.
+
+Once per second, the effect samples the **undimmed** desktop on KWin's existing
+renderer (the Intel iGPU on the development laptop). It decodes SDR RGB into
+linear light, uses the output's colour primaries to calculate luminance, and
+reduces a 32×32 map to one average pixel with GPU mipmaps. Four taps per cell
+give 4096 source samples regardless of native screen resolution. Only that final
+RGBA8 pixel (4 bytes) is read asynchronously; no screenshot is saved, no full-size
+image reaches the CPU, and no separate GPU/device/context is requested.
+
+Temporal smoothing darkens faster than it brightens, with a small deadband to
+reduce pumping from small content changes. Measurements and smoothing histories
+are independent per output and are reset after resize, colour-space changes, or
+disabling. The indicator reports your **manual ceiling**, not a fluctuating
+adaptive level. During a transition, repaint requests run at roughly 60 Hz;
+after settling, analysis/repaint requests return to 1 Hz. The adaptive timer stops
+when all tracked displays sleep or use unsupported colour spaces; display wake
+restarts it. Mirrored physical render views keep separate capture histories.
+
+**Limits:** once-per-second sampling can take roughly a second to notice a newly
+opened white page, followed by the smooth adjustment. It does not prevent the
+initial bright flash. The whole output, including other windows, dims together.
+SDR sRGB and gamma-2.2 targets are supported; other transfer functions, including
+HDR PQ/HLG, retain fixed dimming. A shader/readback failure also falls back to
+fixed dimming. Software dimming still reduces available colour precision.
+
+Adaptive mode defaults on whenever DimSum itself is enabled. To use the old
+fixed dimming instead:
+
+```bash
+kwriteconfig6 --file kwinrc --group Effect-kwin4_effect_software_dim --key AdaptiveEnabled false
+qdbus6 org.kde.KWin /KWin reconfigure
+```
+
+Set `AdaptiveEnabled` back to `true` to restore it. `AdaptiveStrength=0` also
+disables adaptive work; `1` gives the strongest normalisation. No Hyprland-port
+behaviour is changed by this KDE-only implementation.
 
 Target: Dell Precision-class laptop, internal `eDP-1` at
 `3840x2400 @ ~59.994 Hz`, `intel_backlight` already pinned at `1/400`,
@@ -26,6 +86,9 @@ application.
 * Toggle: `Meta+Alt+D`
 * Brighter / darker: `Meta+Alt+F7` / `Meta+Alt+F6` (step `0.05`, floor `0.05`)
 * Brightness shortcuts show a brief on-screen direction and percentage indicator.
+* Adaptive threshold: `Meta+Alt+,` lowers it (more dimming); `Meta+Alt+.`
+  raises it (less dimming), in `0.01` steps within `0.01–1.00`. The threshold
+  is saved and shown in the on-screen indicator. No Shift key is required.
 
 ## 2. Why hardware brightness is not enough
 
@@ -83,7 +146,7 @@ KWin compositor scene  (wallpaper + windows + panels + notifications + other eff
   | SoftwareDimEffect::paintScreen()              |
   |                                               |
   |  pass 1: effects->paintScreen(offscreenTarget)|   -> GPU texture, size = output in device px
-  |  pass 2: draw that texture through dim.frag   |   -> color.rgb *= dimAmount
+  |  pass 2: draw that texture through dim.frag   |   -> color.rgb *= dimAmount * adaptiveGain
   +---+-------------------------------------------+
       |
 final framebuffer
@@ -111,7 +174,7 @@ The mechanics, and where each one comes from:
    multiply. (KWin 6.7.5 loads that file verbatim on every context; the
    `_core` twin in the `.qrc` is never resolved by this KWin and is kept only
    for forward compatibility — see the comment at its top.)
-5. `dimAmount` is a **uniform**, so changing the level costs a `setUniform` and
+5. The combined `dimAmount * adaptiveGain` is a **uniform**, so changing the level costs a `setUniform` and
    a repaint. The shader is never recompiled, and the effect is never
    re-created.
 6. `blocksDirectScanout()` returns `true` while active. Without it KWin can hand
@@ -119,14 +182,16 @@ The mechanics, and where each one comes from:
    compositor, and a fullscreen app would stay bright.
 
 What is deliberately **not** in here: no config GUI, no daemon, no D-Bus
-service, no screen capture, no CPU readback, no image processing, no kcfg code
+service, no screenshot capture, no full-resolution CPU readback, no kcfg code
 generation. Config is read straight out of `kwinrc`.
 
 ## 7. Colour space, gamma and HDR
 
 The multiply happens on whatever KWin writes into the output framebuffer. For an
-SDR output that is **gamma-encoded (sRGB transfer function) space**, not linear
-light. Consequences:
+SDR output that is normally **gamma-encoded** (KWin commonly uses gamma 2.2),
+not linear light. The adaptive measurement decodes the actual SDR transfer
+function before averaging. See [KWin's colour-management documentation](https://github.com/KDE/kwin/blob/master/doc/color-management.md).
+Consequences for the final RGB multiplier:
 
 * `dimAmount = 0.20` gives you 20% of the *encoded* value, which is roughly
   3.3% of linear luminance. That is perceptually much darker than "20%
@@ -298,7 +363,7 @@ qdbus6 org.kde.KWin /KWin reconfigure
 
 ## 11. Usage and shortcuts
 
-The effect registers three global shortcuts itself (via `KGlobalAccel`, the same
+The effect registers five global shortcuts itself (via `KGlobalAccel`, the same
 way KWin's own Invert effect does), so they appear in System Settings → Keyboard
 → Shortcuts under KWin and are rebindable there.
 
@@ -307,6 +372,15 @@ way KWin's own Invert effect does), so they appear in System Settings → Keyboa
 | `Meta+Alt+D` | `Software Dim` | Toggle dimmer on/off (`setAutoRepeat(false)` — one press is one toggle) |
 | `Meta+Alt+F7` | `Software Dim: Increase Brightness` | `dimAmount += 0.05`, clamped to `1.00` |
 | `Meta+Alt+F6` | `Software Dim: Decrease Brightness` | `dimAmount -= 0.05`, clamped to `0.05` |
+| `Meta+Alt+,` | `Software Dim: Decrease Adaptive Threshold` | Lower threshold by `0.01`: stronger adaptive dimming |
+| `Meta+Alt+.` | `Software Dim: Increase Adaptive Threshold` | Raise threshold by `0.01`: weaker adaptive dimming |
+
+Threshold shortcuts preserve the manual ceiling and dimming/adaptive on/off
+states. When off, they save the new threshold for next use and say so in the
+indicator. Existing estimates are retargeted smoothly without waiting for a
+new one-second sample or recompiling shaders.
+The former default `Meta+Alt+-` / `Meta+Alt+=` threshold bindings migrate to
+comma/period when the new plugin loads; unrelated custom bindings are preserved.
 
 Rebinding in System Settings sticks; the code only sets defaults.
 
@@ -323,6 +397,9 @@ DimAmount=0.2
 DimStep=0.05
 DimMin=0.05
 Enabled=false
+AdaptiveEnabled=true
+AdaptiveStrength=0.8
+AdaptiveThreshold=0.12
 ```
 
 | Key | Default | Meaning |
@@ -331,6 +408,9 @@ Enabled=false
 | `DimStep` | `0.05` | How far `Meta+Alt+F6/F7` moves it. |
 | `DimMin` | `0.05` | Lower clamp. Hard floor is `0.01` (`0.00` would be a black screen). |
 | `Enabled` | `false` | Persisted toggle state, written on every toggle. |
+| `AdaptiveEnabled` | `true` | Content-adaptive dimming while DimSum is enabled. `false` restores fixed dimming. |
+| `AdaptiveStrength` | `0.8` | Normalisation strength, clamped to `0–1`; `0` disables analysis and extra dimming. |
+| `AdaptiveThreshold` | `0.12` | Undimmed average linear-light luminance below which no extra dimming is added; clamped to `0.01–1`. Not nits or a per-pixel clipping threshold. |
 
 Edit by hand, then `qdbus6 org.kde.KWin /KWin reconfigure` — `reconfigure()`
 re-reads the group and repaints.
@@ -344,8 +424,17 @@ Per frame, while active:
   switched off);
 * one extra full-screen render pass into it;
 * one full-screen textured quad with a single multiply in the fragment shader;
-* zero CPU readback, zero `glReadPixels`, zero screenshots, zero per-frame
-  allocations.
+* no full-resolution CPU readback or saved screenshots;
+* in adaptive SDR mode, one 32×32 sampling pass and mipmap reduction per second,
+  plus a fenced 4-byte pixel-pack-buffer readback, polled without waiting;
+* fixed mode (`AdaptiveEnabled=false` or strength `0`) skips analysis and its
+  repaint timer entirely.
+
+The renderer works in parallel on the small sampling grid. There is no CPU
+pixel loop to vectorise: only a single averaged value feeds the controller.
+Sampling is approximate (including RGBA8 mip rounding), not an exact full-frame
+histogram. Periodic analysis and transition repaints have a power cost even on an
+otherwise static desktop; no battery-life improvement is claimed.
 
 The honest cost is that this is **not** free: it is two full-screen passes
 instead of one, at `3840x2400`, and it forces compositing on (direct scanout is
@@ -522,6 +611,7 @@ it means keeping a `QSet<QString>` of dimmed output names and consulting it in
 ## 18. Testing
 
 ```fish
+ctest --test-dir build --output-on-failure  # controller + real shader/readback checks
 ./scripts/test.sh            # six stages, interactive
 ./scripts/test.sh --quick    # stages 1-3 only, no keypresses
 ```

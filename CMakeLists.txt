@@ -13,8 +13,8 @@
 cmake_minimum_required(VERSION 3.16)
 
 project(kwin4_effect_software_dim
-    VERSION 1.0.0
-    DESCRIPTION "Compositor-wide software dimmer for KWin 6.7"
+    VERSION 1.2.0
+    DESCRIPTION "Compositor-wide software dimmer for KWin 6.8"
     LANGUAGES CXX
 )
 
@@ -58,7 +58,7 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
-find_package(Qt6 ${QT_MIN_VERSION} REQUIRED COMPONENTS Core Gui)
+find_package(Qt6 ${QT_MIN_VERSION} REQUIRED COMPONENTS Core Gui DBus)
 find_package(KF6 ${KF_MIN_VERSION} REQUIRED COMPONENTS Config CoreAddons GlobalAccel)
 
 # KWin 6 exports its effect API as the single linkable target KWin::kwin from
@@ -149,6 +149,7 @@ pkg_check_modules(EPOXY REQUIRED IMPORTED_TARGET epoxy)
 set(softwaredim_SOURCES
     src/main.cpp
     src/softwaredim.cpp
+    src/luminancesampler.cpp
     src/softwaredim.qrc
 )
 
@@ -173,6 +174,7 @@ target_link_libraries(kwin4_effect_software_dim PRIVATE
     KWin::kwin
     Qt::Core
     Qt::Gui
+    Qt::DBus
     KF6::ConfigCore
     KF6::CoreAddons
     KF6::GlobalAccel
@@ -201,6 +203,21 @@ install(TARGETS kwin4_effect_software_dim
 install(FILES src/metadata.json
     DESTINATION "${KDE_INSTALL_DATADIR}/kwin/effects/metadata.json/kwin4_effect_software_dim"
 )
+
+include(CTest)
+if(BUILD_TESTING)
+    add_executable(test_adaptive tests/test_adaptive.cpp)
+    target_include_directories(test_adaptive PRIVATE src)
+    add_test(NAME adaptive-brightness COMMAND test_adaptive)
+    add_executable(test_luminance tests/test_luminance.cpp src/luminancesampler.cpp src/softwaredim.qrc)
+    target_include_directories(test_luminance PRIVATE src)
+    target_link_libraries(test_luminance PRIVATE KWin::kwin Qt::Gui PkgConfig::EPOXY)
+    add_test(NAME adaptive-luminance COMMAND test_luminance)
+    set_tests_properties(adaptive-luminance PROPERTIES
+        ENVIRONMENT "LIBGL_ALWAYS_SOFTWARE=1;EGL_PLATFORM=surfaceless"
+        SKIP_RETURN_CODE 77
+        TIMEOUT 20)
+endif()
 
 # --------------------------------------------------------------------------
 # Report

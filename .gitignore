@@ -3,3 +3,6 @@ build-*/
 .cache/
 compile_commands.json
 CMakeUserPresets.json
+dist/
+# The Hyprland port is an independent repository, not a KDE release input.
+/ports/

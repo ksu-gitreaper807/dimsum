@@ -12,5 +12,6 @@
     <qresource prefix="/softwaredim">
         <file>shaders/software_dim.frag</file>
         <file>shaders/software_dim_core.frag</file>
+        <file>shaders/luminance.frag</file>
     </qresource>
 </RCC>

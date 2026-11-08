@@ -1,0 +1,12 @@
+post_install() {
+    printf '%s\n' \
+        'DimSum installed. Log out and back in if an older version was loaded.' \
+        'Enable Software Dim in System Settings > Desktop Effects.' \
+        'Meta+Alt+D: toggle; Meta+Alt+F6: darker; Meta+Alt+F7: brighter.' \
+        'Meta+Alt+comma/period: lower/raise the adaptive threshold.' \
+        'Rebuild or download a matching DimSum package when KWin changes version.'
+}
+
+post_upgrade() {
+    post_install
+}

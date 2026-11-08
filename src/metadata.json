@@ -5,7 +5,7 @@
         "Description": "Dims the composited desktop image below the hardware backlight minimum by multiplying the final output by a configurable factor.",
         "Category": "Appearance",
         "Icon": "display-brightness",
-        "Version": "1.0",
+        "Version": "1.2.0",
         "License": "MIT",
         "EnabledByDefault": false,
         "Authors": [

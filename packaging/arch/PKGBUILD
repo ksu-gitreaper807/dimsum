@@ -1,0 +1,48 @@
+# SPDX-License-Identifier: MIT
+# Prepared by scripts/package-arch.sh using a checksummed local source snapshot.
+pkgname=dimsum
+pkgver=1.2.0
+pkgrel=3
+pkgdesc='Desktop software dimming for KDE Plasma — not recommended for moths'
+arch=('x86_64')
+url='https://github.com/ksu-gitreaper807/dimsum'
+license=('MIT')
+depends=('kwin>=6.8' 'qt6-base' 'kconfig' 'kcoreaddons' 'kglobalaccel'
+         'libepoxy' 'gcc-libs' 'glibc' 'plasma-workspace' 'hicolor-icon-theme')
+makedepends=('cmake' 'extra-cmake-modules' 'qt6-tools' 'vulkan-headers'
+             'wayland' 'wayland-protocols' 'plasma-wayland-protocols'
+             'libdrm' 'kwindowsystem')
+install=dimsum.install
+options=('!debug' '!lto')
+source=("dimsum-${pkgver}.tar.gz")
+sha256sums=('SOURCE_SHA256')
+
+build() {
+    # CachyOS defaults to -march=native. Ship a generic x86-64 binary instead.
+    export CFLAGS='-O2 -pipe -march=x86-64 -mtune=generic'
+    export CXXFLAGS="$CFLAGS"
+    cmake -S "dimsum-${pkgver}" -B build \
+        -DCMAKE_BUILD_TYPE=Release \
+        -DCMAKE_INSTALL_PREFIX=/usr \
+        -DKDE_INSTALL_LIBDIR=lib \
+        -DKWIN_EFFECTS_INSTALL_DIR=/usr/lib/qt6/plugins/kwin/effects/plugins
+    cmake --build build
+}
+
+check() {
+    ctest --test-dir build --output-on-failure
+}
+
+package() {
+    # KWin's plugin IID includes its upstream version, but not the distro pkgrel.
+    local kwin_version
+    kwin_version=$(pacman -Q kwin)
+    kwin_version=${kwin_version#kwin }
+    kwin_version=${kwin_version%-*}
+    depends[0]="kwin=${kwin_version}"
+
+    DESTDIR="$pkgdir" cmake --install build
+    install -Dm644 "dimsum-${pkgver}/LICENSE" "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+    install -Dm644 "dimsum-${pkgver}/README.md" "$pkgdir/usr/share/doc/$pkgname/README.md"
+    install -Dm644 "dimsum-${pkgver}/dimsum-logo.svg" "$pkgdir/usr/share/icons/hicolor/scalable/apps/dimsum.svg"
+}

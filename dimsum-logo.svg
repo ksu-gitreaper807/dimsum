@@ -1,0 +1,37 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512" role="img" aria-labelledby="title desc">
+  <title id="title">DimSum</title>
+  <desc id="desc">A golden crescent dumpling glowing softly against a midnight background.</desc>
+  <defs>
+    <radialGradient id="background">
+      <stop stop-color="#303147"/>
+      <stop offset="1" stop-color="#141520"/>
+    </radialGradient>
+    <linearGradient id="dough" x1="0" y1="0" x2="0.7" y2="1">
+      <stop stop-color="#fff2cb"/>
+      <stop offset="1" stop-color="#e9ac66"/>
+    </linearGradient>
+    <radialGradient id="glow">
+      <stop stop-color="#ffc875" stop-opacity=".18"/>
+      <stop offset="1" stop-color="#ffc875" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <rect width="512" height="512" rx="116" fill="url(#background)"/>
+  <circle cx="256" cy="269" r="205" fill="url(#glow)"/>
+  <ellipse cx="256" cy="366" rx="143" ry="17" fill="#090b14" opacity=".45"/>
+  <path d="M100 284Q143 203 217 177Q245 163 256 154Q268 168 296 177Q371 203 412 284C400 339 341 365 256 365S112 339 100 284Z" fill="url(#dough)" stroke="#ffd99e" stroke-width="7" stroke-linejoin="round"/>
+  <g fill="none" stroke="#bd7d48" stroke-width="9" stroke-linecap="round">
+    <path d="M122 278Q152 283 164 307"/>
+    <path d="M155 233Q186 250 194 284"/>
+    <path d="M201 196Q224 222 224 269"/>
+    <path d="M256 171V263"/>
+    <path d="M311 196Q288 222 288 269"/>
+    <path d="M357 233Q326 250 318 284"/>
+    <path d="M390 278Q360 283 348 307"/>
+  </g>
+  <path d="M163 326Q255 363 349 326" fill="none" stroke="#fff1cf" stroke-opacity=".6" stroke-width="7" stroke-linecap="round"/>
+  <g fill="none" stroke="#ffe1a8" stroke-width="7" stroke-linecap="round" opacity=".55">
+    <path d="M219 131Q205 119 219 104"/>
+    <path d="M270 114Q255 101 270 85"/>
+    <path d="M317 137Q303 125 317 110"/>
+  </g>
+</svg>

@@ -23,6 +23,7 @@
 #include <QSize>
 #include <QTimer>
 #include <memory>
+#include <unordered_map>
 
 class QAction;
 
@@ -35,9 +36,11 @@ class GLTexture;
 class LogicalOutput;
 class RenderTarget;
 class RenderViewport;
+class RenderView;
 
 /**
- * Multiplies the fully composited output of every screen by @c m_dimAmount.
+ * Multiplies each composited output by the manual ceiling @c m_dimAmount and
+ * an optional smoothed content-adaptive gain measured once per second.
  *
  * The effect is implemented as a plain KWin::Effect that overrides
  * paintScreen(): it renders the whole scene of the output into an offscreen
@@ -64,6 +67,7 @@ public:
      * Kept false: a dimmer that turns itself on at first login is surprising.
      */
     static bool enabledByDefault();
+    void prePaintScreen(ScreenPrePaintData &data) override;
 
     /**
      * The compositor-wide hook. Called once per output, per frame.
@@ -108,15 +112,23 @@ private:
     void raiseBrightness();
     void lowerBrightness();
     void applyDimAmount(qreal amount);
+    void adjustAdaptiveThreshold(int steps);
+    void showIndicator(const QString &message);
 
     /** Allocates/reallocates the offscreen texture + FBO for @p viewport. */
-    bool ensureOffscreen(const RenderTarget &renderTarget, const RenderViewport &viewport);
+    struct OutputData;
+    bool ensureOffscreen(OutputData &output, const RenderTarget &renderTarget, const RenderViewport &viewport);
     void releaseOffscreen();
+    void updateAdaptiveTimer();
 
     std::unique_ptr<GLShader> m_shader;
-    std::unique_ptr<GLTexture> m_texture;
-    std::unique_ptr<GLFramebuffer> m_framebuffer;
-    QSize m_textureSize;
+    std::unique_ptr<GLShader> m_luminanceShader;
+    std::unordered_map<RenderView *, std::unique_ptr<OutputData>> m_outputs;
+    RenderView *m_currentView = nullptr;
+    QTimer m_adaptiveTimer;
+    bool m_adaptiveEnabled = true;
+    qreal m_adaptiveStrength = 0.8;
+    qreal m_adaptiveThreshold = 0.12;
 
     qreal m_dimAmount = 0.20;
     qreal m_dimStep = 0.05;
@@ -127,7 +139,6 @@ private:
     QAction *m_toggleAction = nullptr;
     QAction *m_increaseAction = nullptr;
     QAction *m_decreaseAction = nullptr;
-    QTimer m_feedbackTimer;
 };
 
 } // namespace KWin

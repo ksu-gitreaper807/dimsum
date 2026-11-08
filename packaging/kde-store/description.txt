@@ -1,0 +1,50 @@
+DimSum — Not Recommended for Moths
+
+Keep your late-night desktop comfortably dim—even below your display's hardware
+brightness minimum. DimSum is a free, MIT-licensed native KWin effect for KDE
+Plasma Wayland, with manual brightness controls and content-adaptive SDR dimming.
+
+White-heavy pages receive extra dimming, while dark content stays below your
+chosen brightness ceiling. Smooth transitions reduce distracting brightness
+pumping when the displayed content changes.
+
+Features
+• Dims the composited desktop, including windows, panels, and notifications.
+• Samples a tiny 32×32 luminance map approximately once per second on KWin's
+  existing renderer. Only one averaged pixel is transferred to the CPU.
+• Independent histories for physical render views, including mirrored outputs.
+• Saved settings and an on-screen brightness/threshold indicator.
+• No hardware-backlight writes, screenshot files, or separate background daemon.
+
+Shortcuts
+Meta+Alt+D — toggle dimming
+Meta+Alt+F6 — darker (manual brightness ceiling −0.05)
+Meta+Alt+F7 — brighter (manual brightness ceiling +0.05)
+Meta+Alt+, — lower adaptive threshold (more dimming, −0.01)
+Meta+Alt+. — raise adaptive threshold (less dimming, +0.01)
+
+Installation and compatibility
+This is a native C++ effect, NOT a scripted KPackage. The binary download is
+for x86_64 Arch Linux/CachyOS with KWin 6.8.2. Install with:
+
+sudo pacman -U ./dimsum-1.2.0-3-x86_64.pkg.tar.zst
+
+Then log out and back in, enable “Software Dim” in System Settings → Desktop
+Effects, and use Meta+Alt+D to toggle it. Former manual installations may need
+cleanup before pacman can own the plugin files; see the repository instructions.
+
+Other distributions and KWin versions must build the source against matching
+KWin development files. Do not install the source archive through “Get New
+Desktop Effects.” Rebuild the native plugin after a KWin version change.
+
+Limitations
+Adaptive mode currently targets SDR sRGB/gamma-2.2. HDR PQ/HLG and unsupported
+paths retain fixed dimming. One-second sampling cannot prevent the initial
+flash of a newly opened white page. The entire display dims together. Adaptive
+repaints have a power cost; battery-life savings are not claimed.
+
+Version: 1.2.0
+License: MIT
+Source: https://github.com/ksu-gitreaper807/dimsum
+Downloads: https://github.com/ksu-gitreaper807/dimsum/releases/tag/v1.2.0
+Issues: https://github.com/ksu-gitreaper807/dimsum/issues
