@@ -2,6 +2,11 @@
 
 Product title: **DimSum — Not Recommended for Moths**
 
+Published on 2026-11-08 as **DimSum - Not Recommended for Moths**:
+<https://store.kde.org/p/2381398/>. The store requires an ASCII hyphen in titles.
+Release: <https://github.com/ksu-gitreaper807/dimsum/releases/tag/v1.2.0>.
+The release source commit is `512bbd875317f049fc6b6793b57c827c01690be9`.
+
 Category: **KWin Effects** (select the Plasma 6 subcategory if offered).
 License: **MIT**. Source: <https://github.com/ksu-gitreaper807/dimsum>.
 Use [description.txt](description.txt) for the product description and
@@ -22,7 +27,15 @@ Use [description.txt](description.txt) for the product description and
    binary and source downloads with clear compatibility labels. Do not mark the
    binary or source download as a scripted KPackage / automatic KNewStuff install.
 6. Verify the public listing and its downloads after submission. Record the final
-   product URL here once it exists; no KDE Store upload is implied by this file.
+   product URL here once it exists.
+
+## KDE Store filenames and checksums
+
+KDE Store normalises underscores in filenames, so its binary is named
+`dimsum-1.2.0-3-x86-64.pkg.tar.zst`. The content matches the GitHub binary
+`dimsum-1.2.0-3-x86_64.pkg.tar.zst`; only the filename differs. The Store has
+`SHA256SUMS-kde.txt`, using its filenames, while GitHub has `SHA256SUMS`, using
+the original filenames. The source archive is `dimsum-1.2.0.tar.gz` on both.
 
 The store's login may require a human bot check. Do not store credentials in the
 repository or include them in release artifacts. Account terms and login prompts

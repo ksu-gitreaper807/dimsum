@@ -3,6 +3,7 @@
 **DimSum — Not Recommended for Moths** is free, open-source software under the
 [MIT license](LICENSE). Source, issues, and releases:
 [GitHub](https://github.com/ksu-gitreaper807/dimsum).
+Published listing: [KDE Store — DimSum](https://store.kde.org/p/2381398/).
 See [release notes](CHANGELOG.md) and the [KDE Store publishing checklist](packaging/kde-store/README.md).
 
 This is a **native C++ desktop effect**, not a scripted KPackage. Install the
